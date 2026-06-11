@@ -1,12 +1,16 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── v0.8.1 ────────────────────────────────────────────────────────
-// Default display range: 08:00–22:00
-// Cross-day support: e.g. 22:00–08:00 for night shift workers
-// First-launch onboarding: time range picker before entering app
-// Persistent storage: remembers display range across sessions
-// Events are first-class citizens. Status derives from events.
-// Google Calendar is just one import source, not the core.
+// ─── v0.9.2 ────────────────────────────────────────────────────────
+// Structural refactor: components extracted to separate files
+//   components/TimelineBar.jsx  — pure timeline bar display
+//   components/WeekView.jsx     — week grid display + day-click
+//   components/DayView.jsx      — day timeline with drag/resize
+//   components/ShareSheet.jsx   — share bottom sheet UI
+//   services/calendarSync.js    — Google Calendar sync (unchanged)
+// App.jsx retains: state, navigation, data loading, settings, modals
+// UI / functionality / data flow: zero changes
+// Events: add date field (YYYY-MM-DD), save on create/edit
+// WeekView + ShareSheet: read real events grouped by date (no more mock week data)
 
 // ─── Status definitions ────────────────────────────────────────────
 const STATUS = {
@@ -46,14 +50,17 @@ function todayAt(h, m = 0) {
   return d.toISOString();
 }
 
+// Returns YYYY-MM-DD for any date object
+function dateStr(d = new Date()) { return d.toISOString().slice(0, 10); }
+
 let _nextId = 10;
 function newId() { return String(++_nextId); }
 
 const SEED_EVENTS = [
-  { id: "1", title: "個案紀錄",   startTime: todayAt(9),  endTime: todayAt(12), note: "", status: "reply"  },
-  { id: "2", title: "午休",       startTime: todayAt(12), endTime: todayAt(13), note: "", status: "free"   },
-  { id: "3", title: "社區訪視",   startTime: todayAt(13), endTime: todayAt(17), note: "", status: "busy"   },
-  { id: "4", title: "個人時間",   startTime: todayAt(18), endTime: todayAt(22), note: "", status: "free"   },
+  { id: "1", date: dateStr(), title: "個案紀錄", startTime: todayAt(9),  endTime: todayAt(12), note: "", status: "reply" },
+  { id: "2", date: dateStr(), title: "午休",     startTime: todayAt(12), endTime: todayAt(13), note: "", status: "free"  },
+  { id: "3", date: dateStr(), title: "社區訪視", startTime: todayAt(13), endTime: todayAt(17), note: "", status: "busy"  },
+  { id: "4", date: dateStr(), title: "個人時間", startTime: todayAt(18), endTime: todayAt(22), note: "", status: "free"  },
 ];
 
 // ─── Status engine ─────────────────────────────────────────────────
@@ -118,35 +125,19 @@ function getWeekHeader() {
 }
 
 const WEEK_DAYS = ["一","二","三","四","五","六","日"];
-const WEEK_MOCK_EVENTS = [
-  [
-    { id:"w1", title:"", startTime: todayAt(9),  endTime: todayAt(12), note:"", status:"busy"  },
-    { id:"w2", title:"", startTime: todayAt(13), endTime: todayAt(17), note:"", status:"busy"  },
-    { id:"w3", title:"", startTime: todayAt(18), endTime: todayAt(22), note:"", status:"free"  },
-  ],
-  [
-    { id:"w4", title:"", startTime: todayAt(9),  endTime: todayAt(11), note:"", status:"busy"  },
-    { id:"w5", title:"", startTime: todayAt(11), endTime: todayAt(13), note:"", status:"reply" },
-    { id:"w6", title:"", startTime: todayAt(14), endTime: todayAt(18), note:"", status:"free"  },
-  ],
-  [
-    { id:"w7", title:"", startTime: todayAt(10), endTime: todayAt(12), note:"", status:"reply" },
-    { id:"w8", title:"", startTime: todayAt(13), endTime: todayAt(16), note:"", status:"busy"  },
-  ],
-  [
-    { id:"w9",  title:"", startTime: todayAt(9),  endTime: todayAt(17), note:"", status:"busy" },
-    { id:"w10", title:"", startTime: todayAt(18), endTime: todayAt(21), note:"", status:"free" },
-  ],
-  [
-    { id:"w11", title:"", startTime: todayAt(9),  endTime: todayAt(12), note:"", status:"busy"   },
-    { id:"w12", title:"", startTime: todayAt(13), endTime: todayAt(17), note:"", status:"busy"   },
-    { id:"w13", title:"", startTime: todayAt(17), endTime: todayAt(18), note:"", status:"reply"  },
-  ],
-  [
-    { id:"w14", title:"", startTime: todayAt(10), endTime: todayAt(14), note:"", status:"free" },
-  ],
-  [],
-];
+// Build array of 7 event-arrays for Mon–Sun of current week from real events
+// Events are matched by date field (YYYY-MM-DD)
+function buildWeekEvents(events) {
+  const today = new Date();
+  const dow   = today.getDay(); // 0=Sun
+  const monOffset = -((dow + 6) % 7); // days from today to Monday
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() + monOffset + i);
+    const ds = dateStr(d);
+    return events.filter(ev => ev.date === ds);
+  });
+}
 
 // ─── CSS ───────────────────────────────────────────────────────────
 const CSS = `
@@ -727,6 +718,39 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
   /* keep toast centered within viewport — acceptable for toast notifications */
 }
 .toast.show { transform: translateX(-50%) translateY(0); }
+/* ── Recurring schedule ── */
+.recur-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 0; border-bottom: 1px solid var(--border);
+}
+.recur-row:last-child { border-bottom: none; }
+.recur-days { display: flex; gap: 5px; flex-wrap: wrap; }
+.recur-day-btn {
+  width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border2);
+  background: var(--surface2); font-family: var(--font-b); font-size: 0.72rem;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all 0.14s; color: var(--muted); font-weight: 400;
+}
+.recur-day-btn.on { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 500; }
+.recur-time-row { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; }
+.recur-time-sep { color: var(--muted2); }
+.recur-time-sel {
+  background: var(--surface2); border: 1px solid var(--border2); border-radius: 7px;
+  color: var(--text); font-family: var(--font-b); font-size: 0.8rem;
+  padding: 5px 8px; cursor: pointer; outline: none;
+}
+.recur-empty {
+  text-align: center; padding: 32px 16px;
+  font-size: 0.84rem; color: var(--muted2); line-height: 2;
+}
+.recur-tag {
+  display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;
+}
+.recur-tag-chip {
+  font-size: 0.68rem; padding: 2px 8px; border-radius: 99px;
+  background: var(--surface2); color: var(--muted); border: 1px solid var(--border);
+}
+
 /* ── Onboarding overlay ── */
 .ob-overlay {
   position: fixed; inset: 0; background: var(--bg); z-index: 200;
@@ -859,6 +883,7 @@ function Pip({ status, size = "md" }) {
   return <span className={`pip pip-${size} ${status}`} />;
 }
 
+// ─── TimelineBar — extracted to components/TimelineBar.jsx ────────
 function TimelineBar({ blocks }) {
   const TOTAL = 24;
   return (
@@ -881,7 +906,8 @@ function TimelineBar({ blocks }) {
 const GRID_START = 0, GRID_END = 24;
 const GRID_HOURS = Array.from({ length: GRID_END - GRID_START }, (_,i) => i);
 
-function WeekGrid({ weekEvents, rangeStart = GRID_START, rangeEnd = GRID_END }) {
+// ─── WeekView — extracted to components/WeekView.jsx ──────────────
+function WeekGrid({ weekEvents, rangeStart = GRID_START, rangeEnd = GRID_END, onDayClick }) {
   const todayIdx = (new Date().getDay() + 6) % 7;
   const hourMaps = weekEvents.map(evs => buildHourMap(buildBlocks(evs)));
   const gridHours = Array.from({ length: rangeEnd - rangeStart }, (_, i) => rangeStart + i);
@@ -890,7 +916,12 @@ function WeekGrid({ weekEvents, rangeStart = GRID_START, rangeEnd = GRID_END }) 
       <div className="wk-grid" style={{ gridTemplateRows: `26px repeat(${rangeEnd - rangeStart}, 32px)` }}>
         <div className="wk-corner" />
         {WEEK_DAYS.map((day, di) => (
-          <div key={di} className={`wk-day-hdr ${di===todayIdx?"today":""}`}>週{day}</div>
+          <div key={di}
+            className={`wk-day-hdr ${di===todayIdx?"today":""}`}
+            style={ onDayClick ? { cursor:"pointer" } : {} }
+            onClick={() => onDayClick && onDayClick(di)}>
+            週{day}
+          </div>
         ))}
         {gridHours.map((h, hi) => {
           const isLast = hi === gridHours.length - 1;
@@ -911,6 +942,7 @@ function WeekGrid({ weekEvents, rangeStart = GRID_START, rangeEnd = GRID_END }) 
               return (
                 <div key={`${di}-${h}`} className={cls}
                   style={{ gridRow:hi+2, gridColumn:di+2 }}
+                  onClick={() => onDayClick && onDayClick(di)}
                   title={`週${WEEK_DAYS[di]}\n${fmt(h)}–${fmt(h+1)}\n${STATUS[status].label}`}
                 />
               );
@@ -923,19 +955,12 @@ function WeekGrid({ weekEvents, rangeStart = GRID_START, rangeEnd = GRID_END }) 
 }
 
 // ─── Event modal (add / edit) ──────────────────────────────────────
-const STATUS_HINTS = {
-  busy:    "對方需等待",
-  urgent:  "緊急時可打來",
-  reply:   "訊息會回，但慢",
-  free:    "隨時都行",
-  offline: "不要打擾我",
-};
-
 function EventModal({ event, onSave, onClose }) {
   const isEdit = !!event?.id;
   const nowH = new Date().getHours();
   const [form, setForm] = useState({
     title:     event?.title     ?? "",
+    date:      event?.date      ?? dateStr(),
     startTime: event?.startTime ? fmtTime(event.startTime) : `${String(nowH).padStart(2,"0")}:00`,
     endTime:   event?.endTime   ? fmtTime(event.endTime)   : `${String(nowH+1).padStart(2,"0")}:00`,
     note:      event?.note      ?? "",
@@ -946,10 +971,9 @@ function EventModal({ event, onSave, onClose }) {
 
   const handleSave = () => {
     if (!form.title.trim()) return;
-    const today = new Date().toISOString().slice(0,10);
-    const startTime = new Date(`${today}T${form.startTime}:00`).toISOString();
-    const endTime   = new Date(`${today}T${form.endTime}:00`).toISOString();
-    onSave({ id: event?.id ?? newId(), title: form.title.trim(), startTime, endTime, note: form.note, status: form.status });
+    const startTime = new Date(`${form.date}T${form.startTime}:00`).toISOString();
+    const endTime   = new Date(`${form.date}T${form.endTime}:00`).toISOString();
+    onSave({ id: event?.id ?? newId(), date: form.date, title: form.title.trim(), startTime, endTime, note: form.note, status: form.status });
   };
 
   return (
@@ -967,6 +991,12 @@ function EventModal({ event, onSave, onClose }) {
               set("title", v);
               if (!isEdit) set("status", suggested);
             }} />
+        </div>
+
+        <div className="field">
+          <div className="field-label">日期</div>
+          <input className="input" type="date" value={form.date}
+            onChange={e => set("date", e.target.value)} />
         </div>
 
         <div className="time-row">
@@ -1020,15 +1050,15 @@ function EventModal({ event, onSave, onClose }) {
 // ─── Share Sheet ───────────────────────────────────────────────────
 // Single preview: timeline bar + status blocks (no titles, no notes)
 // Two action buttons: 複製連結 + 存成圖片
+// ─── ShareSheet — extracted to components/ShareSheet.jsx ──────────
 function ShareSheet({ events, onClose, toast, mode = "today" }) {
-  const blocks    = buildBlocks(events);
+  const blocks    = buildBlocks(events.filter(ev => !ev.date || ev.date === dateStr()));
   const daytime   = blocks.filter(b => b.end > 8 && b.start < 22 && b.status !== "offline");
   const dateLabel = new Date().toLocaleDateString("zh-TW", { month:"long", day:"numeric" });
   const weekday   = new Date().toLocaleDateString("zh-TW", { weekday:"long" });
   const isWeek    = mode === "week";
 
-  const todayIdx   = (new Date().getDay() + 6) % 7;
-  const weekEvents = WEEK_MOCK_EVENTS.map((evs, i) => i === todayIdx ? events : evs);
+  const weekEvents = buildWeekEvents(events);
 
   const copyLink = () => {
     navigator.clipboard?.writeText(SHARE_URL).catch(() => {});
@@ -1135,64 +1165,92 @@ function ShareSheet({ events, onClose, toast, mode = "today" }) {
 }
 
 // ─── Page: Home ────────────────────────────────────────────────────
-function HomePage({ events, setEvents, displayRange, toast }) {
+function HomePage({ events, displayRange, setTab, toast }) {
   const [shareOpen, setShareOpen] = useState(false);
-  const [modal, setModal]         = useState(null);
+  const todayEvs = events.filter(ev => !ev.date || ev.date === dateStr());
+  const blocks   = buildBlocks(todayEvs);
+  const nowHour  = new Date().getHours();
+  const nowBlock = blocks.find(b => nowHour >= b.start && nowHour < b.end);
+  const nowStatus = nowBlock?.status ?? "offline";
+  const s = STATUS[nowStatus];
 
-  const blocks  = buildBlocks(events);
-
-  const handleSave = (ev) => {
-    setEvents(prev => {
-      const idx = prev.findIndex(e => e.id === ev.id);
-      if (idx >= 0) { const n=[...prev]; n[idx]=ev; return n; }
-      return [...prev, ev];
-    });
-    toast("已新增 ✓");
-    setModal(null);
-  };
+  // Next upcoming event
+  const sorted    = [...todayEvs].sort((a,b) => new Date(a.startTime)-new Date(b.startTime));
+  const nextEv    = sorted.find(ev => new Date(ev.startTime).getHours() > nowHour);
+  const currentEv = sorted.find(ev => {
+    const sh = new Date(ev.startTime).getHours();
+    const eh = new Date(ev.endTime).getHours();
+    return nowHour >= sh && nowHour < eh;
+  });
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", height:"calc(100dvh - 64px)", overflow:"hidden" }}>
-
-      {/* Fixed top: timeline card */}
-      <div style={{ padding:"20px 22px 8px", flexShrink:0 }}>
-        <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.4rem", letterSpacing:"-0.01em" }}>
+    <div className="page" style={{ paddingTop:26 }}>
+      {/* Date header */}
+      <div>
+        <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.5rem", letterSpacing:"-0.01em" }}>
           今天
         </div>
-        <div style={{ fontFamily:"var(--font-b)", fontSize:"0.9rem", color:"var(--muted)", marginTop:2 }}>
+        <div style={{ fontSize:"0.82rem", color:"var(--muted)", marginTop:2 }}>
           {fmtDateLabel()}
         </div>
       </div>
 
-      {/* Day view — fills remaining height, internal scroll */}
-      <div style={{ flex:1, minHeight:0, display:"flex", flexDirection:"column", padding:"12px 12px 8px" }}>
-        <DayView events={events} setEvents={setEvents} onEdit={ev => setModal(ev)}
-          rangeStart={displayRange.start} rangeEnd={displayRange.end} />
+      {/* Status card — hero */}
+      <div className="card">
+        <div className="card-label">現在</div>
+        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+          <Pip status={nowStatus} size="md" />
+          <div>
+            <div style={{ fontFamily:"var(--font-b)", fontWeight:500, fontSize:"1.4rem", letterSpacing:"-0.01em", color:s.color }}>
+              {s.label}
+            </div>
+            {nowBlock && nowStatus !== "offline" && (
+              <div style={{ fontSize:"0.75rem", color:"var(--muted)", marginTop:2 }}>
+                到 {fmt(nowBlock.end)} 為止
+                {currentEv && ` · ${currentEv.title}`}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* FAB */}
-      <button className="fab" onClick={() => setModal("add")} title="新增事件">＋</button>
+      {/* Mini timeline */}
+      <div className="card" style={{ padding:"14px 18px" }}>
+        <TimelineBar blocks={blocks} />
+      </div>
 
-      {shareOpen && <ShareSheet events={events} toast={toast} onClose={() => setShareOpen(false)} />}
-      {modal && <EventModal event={null} onSave={handleSave} onClose={() => setModal(null)} />}
+      {/* Next event hint */}
+      {nextEv && (
+        <div className="card" style={{ padding:"12px 18px" }}>
+          <div className="card-label" style={{ marginBottom:6 }}>接下來</div>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <Pip status={nextEv.status} size="sm" />
+            <span style={{ fontSize:"0.9rem", fontWeight:500 }}>{nextEv.title}</span>
+            <span style={{ fontSize:"0.76rem", color:"var(--muted)", marginLeft:"auto" }}>
+              {fmtTime(nextEv.startTime)}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="btn-row">
+        <button className="btn btn-p" onClick={() => setTab("行程")}>
+          📋 管理行程
+        </button>
+        <button className="btn btn-g" onClick={() => setShareOpen(true)}>
+          ↗ 分享
+        </button>
+      </div>
+
+      {shareOpen && <ShareSheet events={events} toast={toast} mode="today" onClose={() => setShareOpen(false)} />}
     </div>
   );
 }
 
 // ─── Day View ──────────────────────────────────────────────────────
-const DV_START  = 0;           // 00:00
-const DV_END    = 24;          // 24:00
-const DV_HOURS  = 24;          // full day
-// px per hour: fit ~600px screen height inside the scrollable container
-// (container is ~screen - nav 64 - header ~60 - toggle ~42 = ~430px visible)
-// We use 36px/hr so full day = 864px → scrollable but not overwhelming
-const PX_PER_HR = 36;
-const TOTAL_H   = DV_HOURS * PX_PER_HR;   // 864px
-const SNAP_MINS = 15;
-
-function minsToY(mins) { return ((mins - DV_START * 60) / 60) * PX_PER_HR; }
-function yToMins(y)    { return Math.round((y / PX_PER_HR) * 60 / SNAP_MINS) * SNAP_MINS + DV_START * 60; }
-function clampMins(m)  { return Math.max(DV_START * 60, Math.min(DV_END * 60, m)); }
+const PX_PER_HR = 36;  // pixels per hour in timeline
+const SNAP_MINS = 15;  // drag snap resolution
 function minsToTimeStr(m) {
   const h = Math.floor(m / 60), min = m % 60;
   return `${String(h).padStart(2,"0")}:${String(min).padStart(2,"0")}`;
@@ -1206,6 +1264,7 @@ function minsToISO(mins) {
   return new Date(`${today}T${minsToTimeStr(mins)}:00`).toISOString();
 }
 
+// ─── DayView — extracted to components/DayView.jsx ────────────────
 function DayView({ events, setEvents, onEdit, rangeStart = 8, rangeEnd = 22 }) {
   const colRef       = useRef(null);
   const containerRef = useRef(null);
@@ -1342,17 +1401,19 @@ function DayView({ events, setEvents, onEdit, rangeStart = 8, rangeEnd = 22 }) {
 // ─── Page: Events ──────────────────────────────────────────────────
 function EventsPage({ events, setEvents, displayRange, toast }) {
   const [modal, setModal]         = useState(null);
-  const [view, setView]           = useState("list"); // "list" | "week"
-  const [shareOpen, setShareOpen] = useState(false);
+  const [view, setView]           = useState("day");
+  const [viewDate, setViewDate]   = useState(dateStr());
+  const [shareOpen, setShareOpen] = useState(null); // null | "today" | "week"
 
-  const sorted = [...events].sort((a,b) => new Date(a.startTime)-new Date(b.startTime));
-  const blocks = buildBlocks(events);
+  const dayEvents  = events.filter(ev => !ev.date || ev.date === viewDate);
+  const weekEvents = buildWeekEvents(events);
 
   const handleSave = (ev) => {
+    const saved = { ...ev, date: ev.date || viewDate };
     setEvents(prev => {
-      const idx = prev.findIndex(e => e.id === ev.id);
-      if (idx >= 0) { const n=[...prev]; n[idx]=ev; return n; }
-      return [...prev, ev];
+      const idx = prev.findIndex(e => e.id === saved.id);
+      if (idx >= 0) { const n=[...prev]; n[idx]=saved; return n; }
+      return [...prev, saved];
     });
     toast(modal?.id ? "已更新 ✓" : "已新增 ✓");
     setModal(null);
@@ -1363,103 +1424,133 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
     toast("已刪除");
   };
 
-  const todayIdx   = (new Date().getDay() + 6) % 7;
-  const weekEvents = WEEK_MOCK_EVENTS.map((evs, i) => i === todayIdx ? events : evs);
+  const handleWeekCellClick = (weekDayIdx) => {
+    const today = new Date();
+    const monOffset = -((today.getDay() + 6) % 7);
+    const d = new Date(today); d.setDate(today.getDate() + monOffset + weekDayIdx);
+    setViewDate(dateStr(d));
+    setView("day");
+  };
+
+  const shiftDay = (n) => {
+    const d = new Date(viewDate); d.setDate(d.getDate() + n); setViewDate(dateStr(d));
+  };
+  const isToday = viewDate === dateStr();
+  const viewDateLabel = new Date(viewDate + "T12:00:00").toLocaleDateString("zh-TW",
+    { month:"long", day:"numeric", weekday:"short" });
 
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"calc(100dvh - 64px)", overflow:"hidden" }}>
-      {/* Fixed header */}
-      <div style={{ padding:"20px 22px 0", flexShrink:0 }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
-          <div>
-            <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.4rem" }}>行程</div>
-            <div className="page-date">{fmtDateLabel()}</div>
-          </div>
+
+      {/* Header */}
+      <div style={{ padding:"16px 22px 0", flexShrink:0 }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+          {view === "day" ? (
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <button className="btn-outline" style={{ padding:"5px 10px", fontSize:"0.8rem" }} onClick={() => shiftDay(-1)}>‹</button>
+              <div>
+                <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.15rem" }}>{viewDateLabel}</div>
+                {!isToday && (
+                  <button onClick={() => setViewDate(dateStr())}
+                    style={{ fontSize:"0.7rem", color:"var(--accent)", background:"none", border:"none", cursor:"pointer", padding:0, marginTop:1 }}>
+                    回到今天
+                  </button>
+                )}
+              </div>
+              <button className="btn-outline" style={{ padding:"5px 10px", fontSize:"0.8rem" }} onClick={() => shiftDay(1)}>›</button>
+            </div>
+          ) : (
+            <div>
+              <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.15rem" }}>本週</div>
+              <div style={{ fontSize:"0.72rem", color:"var(--muted)", marginTop:2 }}>{getWeekHeader()}</div>
+            </div>
+          )}
           <button className="btn-outline" onClick={() => setModal("add")}>＋ 新增</button>
         </div>
-        <div className="view-toggle" style={{ marginBottom:12 }}>
-          <button className={`view-toggle-btn ${view==="list"?"on":""}`} onClick={() => setView("list")}>列表</button>
+        <div className="view-toggle" style={{ marginBottom:10 }}>
+          <button className={`view-toggle-btn ${view==="day"?"on":""}`} onClick={() => setView("day")}>日</button>
           <button className={`view-toggle-btn ${view==="week"?"on":""}`} onClick={() => setView("week")}>週</button>
         </div>
       </div>
 
-      {/* Scrollable body */}
+      {/* Body */}
       <div style={{ flex:1, minHeight:0, display:"flex", flexDirection:"column" }}>
-
-        {/* List view: timeline bar on top, then event list */}
-        {view === "list" && (
-          <div style={{ flex:1, overflowY:"auto", padding:"0 22px 24px" }}>
-            {/* Today progress bar */}
-            <div style={{ marginBottom:16 }}>
-              <div className="ev-section-label" style={{ marginBottom:8 }}>今天</div>
-              <TimelineBar blocks={blocks} />
-            </div>
-
-            {sorted.length === 0 ? (
-              <div className="ev-empty">
-                還沒有任何行程<br />
-                <span style={{ color:"var(--muted2)", fontSize:"0.8rem" }}>點擊「新增」建立第一個事件</span>
-              </div>
-            ) : (
-              <div className="ev-list">
-                {sorted.map(ev => {
-                  const s = STATUS[ev.status];
-                  return (
-                    <div key={ev.id} className="ev-item" onClick={() => setModal(ev)}>
-                      <div className="ev-stripe" style={{ background: s.color }} />
-                      <div className="ev-body">
-                        <span className="ev-time">{fmtTime(ev.startTime)} – {fmtTime(ev.endTime)}</span>
-                        <span className="ev-title">{ev.title}</span>
-                        <span className="ev-status-badge" style={{ color:s.color, borderColor:s.color+"40", background:s.bg }}>
-                          {s.label}
-                        </span>
-                      </div>
-                      <div className="ev-actions" onClick={e => e.stopPropagation()}>
-                        <button className="ev-action-btn" onClick={() => handleDelete(ev.id)} title="刪除">✕</button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+        {view === "day" && (
+          <div style={{ flex:1, minHeight:0, display:"flex", flexDirection:"column", padding:"0 12px 4px" }}>
+            <DayView events={dayEvents} setEvents={setEvents} onEdit={ev => setModal(ev)}
+              rangeStart={displayRange.start} rangeEnd={displayRange.end} />
           </div>
         )}
-
-        {/* Week view */}
         {view === "week" && (
-          <div style={{ flex:1, minHeight:0, display:"flex", flexDirection:"column", padding:"0 0 8px" }}>
-            <div style={{ flex:1, minHeight:0, overflowY:"auto", overflowX:"auto", padding:"0 22px" }}>
-              <div style={{ marginBottom:6 }}>
-                <span style={{ fontSize:"0.72rem", color:"var(--muted)", letterSpacing:"0.04em" }}>
-                  {getWeekHeader()}
-                </span>
-              </div>
-              <WeekGrid weekEvents={weekEvents} rangeStart={displayRange.start} rangeEnd={displayRange.end} />
+          <div style={{ flex:1, minHeight:0, overflowY:"auto", overflowX:"auto", padding:"4px 22px 8px" }}>
+            <WeekGrid weekEvents={weekEvents} rangeStart={displayRange.start} rangeEnd={displayRange.end}
+              onDayClick={handleWeekCellClick} />
+            <div style={{ fontSize:"0.69rem", color:"var(--muted2)", textAlign:"center", marginTop:8 }}>
+              點擊任一欄位切換到日視圖
             </div>
           </div>
         )}
       </div>
 
-      {/* Share button */}
-      <div style={{ padding:"0 22px 12px", flexShrink:0 }}>
-        <button className="btn btn-g" style={{ width:"100%" }} onClick={() => setShareOpen(true)}>
-          ↗ 分享行程
-        </button>
+      {/* Dual share buttons */}
+      <div style={{ padding:"8px 22px 12px", flexShrink:0, display:"flex", gap:10 }}>
+        <button className="btn btn-g" style={{ flex:1 }} onClick={() => setShareOpen("today")}>↗ 分享今日</button>
+        <button className="btn btn-g" style={{ flex:1 }} onClick={() => setShareOpen("week")}>↗ 分享本週</button>
       </div>
 
-      {modal && <EventModal event={modal==="add"?null:modal} onSave={handleSave} onClose={() => setModal(null)} />}
-      {shareOpen && <ShareSheet events={events} toast={toast} mode={view} onClose={() => setShareOpen(false)} />}
+      <button className="fab" onClick={() => setModal("add")} title="新增事件">＋</button>
+
+      {modal && <EventModal event={modal==="add"?{ date:viewDate }:modal} onSave={handleSave} onClose={() => setModal(null)} />}
+      {shareOpen && <ShareSheet events={events} toast={toast} mode={shareOpen} onClose={() => setShareOpen(null)} />}
     </div>
   );
 }
 
-// ─── Mock GCal events (raw, no status) ────────────────────────────
-const GCAL_MOCK = [
-  { gcalId: "gc1", title: "社區訪視",   startTime: todayAt(9),  endTime: todayAt(12) },
-  { gcalId: "gc2", title: "個案會議",   startTime: todayAt(13), endTime: todayAt(15) },
-  { gcalId: "gc3", title: "寫個案紀錄", startTime: todayAt(15), endTime: todayAt(17) },
-  { gcalId: "gc4", title: "自由時間",   startTime: todayAt(19), endTime: todayAt(21) },
-];
+
+// ─── Calendar sync entry point ─────────────────────────────────────
+// All OAuth / fetch / convert / dedup logic lives in calendarSync.js
+// App.jsx exposes only syncCalendar() — GcalSettings calls this and nothing else.
+//
+// In the full project, import from '/lib/calendarSync.js':
+//   import { syncCalendar, adjustEventStatus } from '../lib/calendarSync.js'
+//
+// Inline stub (mirrors calendarSync.js exports exactly):
+const { syncCalendar, adjustEventStatus } = (() => {
+  function _todayAt(h) { const d = new Date(); d.setHours(h,0,0,0); return d.toISOString(); }
+
+  // Mirrors calendarSync._oauthConnect + _fetchRawEvents + _convertEvent + _dedup
+  async function syncCalendar(rules, existingEvents) {
+    // Simulate OAuth + fetch
+    const raw = await new Promise(resolve => setTimeout(() => resolve([
+      { gcalId:"gc1", title:"社區訪視",   startTime:_todayAt(9),  endTime:_todayAt(12) },
+      { gcalId:"gc2", title:"個案會議",   startTime:_todayAt(13), endTime:_todayAt(15) },
+      { gcalId:"gc3", title:"寫個案紀錄", startTime:_todayAt(15), endTime:_todayAt(17) },
+      { gcalId:"gc4", title:"自由時間",   startTime:_todayAt(19), endTime:_todayAt(21) },
+    ]), 1400));
+    // Convert: apply rules, add CanWe fields
+    let counter = 200;
+    const proposed = raw.map(ev => ({
+      id:        "gcal_" + (++counter),
+      gcalId:    ev.gcalId,
+      title:     ev.title,
+      date:      dateStr(new Date(ev.startTime)),
+      startTime: ev.startTime,
+      endTime:   ev.endTime,
+      note:      "",
+      status:    guessStatus(ev.title),
+      source:    "google",
+    }));
+    // Dedup
+    const importedIds = new Set(existingEvents.filter(e => e.source === "google").map(e => e.gcalId));
+    return proposed.filter(ev => !importedIds.has(ev.gcalId));
+  }
+
+  function adjustEventStatus(proposed, gcalId, status) {
+    return proposed.map(ev => ev.gcalId === gcalId ? { ...ev, status } : ev);
+  }
+
+  return { syncCalendar, adjustEventStatus };
+})();
 
 // ─── Settings sub-pages ────────────────────────────────────────────
 
@@ -1617,30 +1708,31 @@ function TimeRangeSettings({ displayRange, setDisplayRange, onBack, toast }) {
 }
 
 // Sub-page: Google Calendar 匯入
+// GcalSettings manages UI state only.
+// All sync logic (OAuth, fetch, convert, dedup) is in syncCalendar() → calendarSync.js
 function GcalSettings({ events, setEvents, onBack, toast }) {
   const [gcalState, setGcalState] = useState("idle");
   const [preview, setPreview]     = useState([]);
 
-  const connectGoogle = () => {
+  const connectGoogle = async () => {
     setGcalState("connecting");
-    setTimeout(() => {
-      const proposed = GCAL_MOCK.map(ev => ({
-        ...ev, id: newId(), note: "", status: guessStatus(ev.title), source: "google",
-      }));
+    try {
+      const proposed = await syncCalendar([], events); // rules param: [] uses default guessStatus
       setPreview(proposed);
       setGcalState("preview");
-    }, 1400);
+    } catch (_) {
+      setGcalState("idle");
+      toast("連結失敗，請重試");
+    }
   };
 
-  const adjustPreviewStatus = (gcalId, status) =>
-    setPreview(p => p.map(ev => ev.gcalId === gcalId ? { ...ev, status } : ev));
+  const handleAdjustStatus = (gcalId, status) =>
+    setPreview(p => adjustEventStatus(p, gcalId, status));
 
   const confirmImport = () => {
-    const existingIds = new Set(events.filter(e => e.source === "google").map(e => e.gcalId));
-    const toImport = preview.filter(ev => !existingIds.has(ev.gcalId));
-    setEvents(prev => [...prev, ...toImport]);
+    setEvents(prev => [...prev, ...preview]);
     setGcalState("imported");
-    toast(`已匯入 ${toImport.length} 個事件 ✓`);
+    toast(`已匯入 ${preview.length} 個事件 ✓`);
   };
 
   const disconnect = () => { setGcalState("idle"); setPreview([]); };
@@ -1708,7 +1800,7 @@ function GcalSettings({ events, setEvents, onBack, toast }) {
                       {STATUS_KEYS.map(k => {
                         const ks = STATUS[k]; const sel = ev.status === k;
                         return (
-                          <button key={k} onClick={() => adjustPreviewStatus(ev.gcalId, k)}
+                          <button key={k} onClick={() => handleAdjustStatus(ev.gcalId, k)}
                             style={{ border:`1px solid ${sel ? ks.color : "var(--border2)"}`, background:sel ? ks.bg : "var(--surface)", color:sel ? ks.color : "var(--muted)", borderRadius:7, padding:"3px 9px", fontSize:"0.72rem", fontFamily:"var(--font-b)", cursor:"pointer", fontWeight:sel?500:400, transition:"all 0.14s" }}>
                             {ks.label}
                           </button>
@@ -1746,16 +1838,195 @@ function GcalSettings({ events, setEvents, onBack, toast }) {
 }
 
 // ─── Main settings menu ────────────────────────────────────────────
-function SettingsPage({ rules, setRules, events, setEvents, displayRange, setDisplayRange, toast }) {
-  const [sub, setSub] = useState(null); // null | "status" | "keywords" | "timerange" | "gcal"
+// ─── Settings sub-page: 固定排程 ──────────────────────────────────
+const WEEKDAYS = ["一","二","三","四","五","六","日"];
+const WEEKDAY_FULL = ["週一","週二","週三","週四","週五","週六","週日"];
+const HOURS = Array.from({length:24},(_,h)=>h);
+
+const DEFAULT_RECURRING = []; // { id, title, days:[0-6], startTime:"HH:MM", endTime:"HH:MM", status }
+
+function RecurringSettings({ recurring, setRecurring, onBack, toast }) {
+  const [editing, setEditing] = useState(null); // null | "new" | schedule object
+
+  const blankForm = () => ({
+    id: newId(), title: "", days: [0,1,2,3,4], // Mon–Fri default
+    startTime: "12:00", endTime: "13:00", status: "free",
+  });
+
+  const [form, setForm] = useState(blankForm());
+  const setF = (k,v) => setForm(f => ({...f,[k]:v}));
+
+  const toggleDay = (d) => {
+    setF("days", form.days.includes(d)
+      ? form.days.filter(x=>x!==d)
+      : [...form.days, d].sort());
+  };
+
+  const openNew = () => { setForm(blankForm()); setEditing("new"); };
+  const openEdit = (s) => { setForm({...s}); setEditing(s); };
+
+  const save = () => {
+    if (!form.title.trim() || form.days.length === 0) {
+      toast("請填寫名稱並選擇星期"); return;
+    }
+    const entry = { ...form, title: form.title.trim() };
+    setRecurring(rs => {
+      const idx = rs.findIndex(r => r.id === entry.id);
+      if (idx >= 0) { const n=[...rs]; n[idx]=entry; return n; }
+      return [...rs, entry];
+    });
+    toast("已儲存 ✓");
+    setEditing(null);
+  };
+
+  const del = (id) => {
+    setRecurring(rs => rs.filter(r => r.id !== id));
+    toast("已刪除");
+  };
+
+  const STATUS_OPTIONS = STATUS_KEYS.map(k => ({ value:k, label:`${STATUS[k].emoji} ${STATUS[k].label}` }));
+
+  // ── Edit form ──
+  if (editing) return (
+    <div className="page" style={{ paddingTop:20 }}>
+      <SettingsBack onBack={() => setEditing(null)} title={editing==="new"?"新增固定排程":"編輯固定排程"} />
+
+      <div className="card" style={{ display:"flex", flexDirection:"column", gap:16 }}>
+        {/* Title */}
+        <div className="field">
+          <div className="field-label">名稱</div>
+          <input className="input" placeholder="例：午休、晨會、固定訪視…" value={form.title}
+            onChange={e => setF("title", e.target.value)} />
+        </div>
+
+        {/* Weekday selector */}
+        <div className="field">
+          <div className="field-label">重複星期</div>
+          <div className="recur-days">
+            {WEEKDAYS.map((d,i) => (
+              <button key={i} className={`recur-day-btn ${form.days.includes(i)?"on":""}`}
+                onClick={() => toggleDay(i)}>
+                {d}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Time */}
+        <div className="field">
+          <div className="field-label">時間</div>
+          <div className="recur-time-row">
+            <select className="recur-time-sel" value={form.startTime}
+              onChange={e => setF("startTime", e.target.value)}>
+              {HOURS.flatMap(h => ["00","15","30","45"].map(m => {
+                const v = `${String(h).padStart(2,"0")}:${m}`;
+                return <option key={v} value={v}>{v}</option>;
+              }))}
+            </select>
+            <span className="recur-time-sep">–</span>
+            <select className="recur-time-sel" value={form.endTime}
+              onChange={e => setF("endTime", e.target.value)}>
+              {HOURS.flatMap(h => ["00","15","30","45"].map(m => {
+                const v = `${String(h).padStart(2,"0")}:${m}`;
+                return <option key={v} value={v}>{v}</option>;
+              }))}
+            </select>
+          </div>
+        </div>
+
+        {/* Status */}
+        <div className="field">
+          <div className="field-label">這段時間的狀態</div>
+          <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+            {STATUS_KEYS.map(k => {
+              const s = STATUS[k]; const sel = form.status===k;
+              return (
+                <div key={k} onClick={() => setF("status",k)}
+                  style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 12px", borderRadius:9,
+                    border:`1px solid ${sel?s.color:"var(--border)"}`,
+                    background: sel?s.bg:"var(--surface2)", cursor:"pointer", transition:"all 0.14s" }}>
+                  <Pip status={k} size="sm" />
+                  <span style={{ fontSize:"0.88rem", fontWeight:sel?500:400, color:sel?s.color:"var(--text)" }}>{s.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="btn-row">
+        <button className="btn btn-g" onClick={() => setEditing(null)}>取消</button>
+        <button className="btn btn-p" onClick={save}>儲存</button>
+      </div>
+    </div>
+  );
+
+  // ── List view ──
+  return (
+    <div className="page" style={{ paddingTop:20 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:18 }}>
+        <div>
+          <button className="settings-back" onClick={onBack}>← 設定</button>
+          <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.3rem" }}>固定排程</div>
+        </div>
+        <button className="btn-outline" style={{ padding:"6px 14px", fontSize:"0.8rem" }} onClick={openNew}>＋ 新增</button>
+      </div>
+
+      {recurring.length === 0 ? (
+        <div className="recur-empty">
+          還沒有固定排程<br />
+          <span style={{ fontSize:"0.78rem" }}>例如：每週一到五 12:00–13:30 午休</span>
+        </div>
+      ) : (
+        <div className="card">
+          {recurring.map(r => {
+            const s = STATUS[r.status];
+            return (
+              <div key={r.id} className="recur-row" onClick={() => openEdit(r)} style={{ cursor:"pointer" }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                    <Pip status={r.status} size="sm" />
+                    <span style={{ fontSize:"0.9rem", fontWeight:500 }}>{r.title}</span>
+                    <span style={{ fontSize:"0.76rem", color:s.color }}>{s.label}</span>
+                  </div>
+                  <div style={{ fontSize:"0.76rem", color:"var(--muted)", marginBottom:5 }}>
+                    {r.startTime} – {r.endTime}
+                  </div>
+                  <div className="recur-tag">
+                    {r.days.map(d => (
+                      <span key={d} className="recur-tag-chip">{WEEKDAY_FULL[d]}</span>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                  <button className="ev-action-btn" onClick={e => { e.stopPropagation(); del(r.id); }}>✕</button>
+                  <span style={{ color:"var(--muted2)", fontSize:"0.85rem" }}>›</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div style={{ fontSize:"0.72rem", color:"var(--muted2)", lineHeight:1.7, padding:"0 2px" }}>
+        固定排程會自動套用到每週對應的日期，可在行程頁手動覆蓋。
+      </div>
+    </div>
+  );
+}
+
+function SettingsPage({ rules, setRules, events, setEvents, displayRange, setDisplayRange, recurring, setRecurring, toast }) {
+  const [sub, setSub] = useState(null);
 
   if (sub === "status")    return <StatusSettings    onBack={() => setSub(null)} toast={toast} />;
   if (sub === "keywords")  return <KeywordSettings   rules={rules} setRules={setRules} onBack={() => setSub(null)} toast={toast} />;
   if (sub === "timerange") return <TimeRangeSettings displayRange={displayRange} setDisplayRange={setDisplayRange} onBack={() => setSub(null)} toast={toast} />;
   if (sub === "gcal")      return <GcalSettings      events={events} setEvents={setEvents} onBack={() => setSub(null)} toast={toast} />;
+  if (sub === "recurring") return <RecurringSettings recurring={recurring} setRecurring={setRecurring} onBack={() => setSub(null)} toast={toast} />;
 
   const MENU = [
     { key:"gcal",      icon:"📅", title:"Google Calendar 匯入", desc:"連結並匯入行事曆事件" },
+    { key:"recurring", icon:"🔁", title:"固定排程",             desc:`${recurring.length} 個固定排程` },
     { key:"status",    icon:"🎨", title:"狀態管理",             desc:"自訂狀態名稱與說明文字" },
     { key:"keywords",  icon:"🔤", title:"關鍵字規則",           desc:"匯入時自動推薦狀態" },
     { key:"timerange", icon:"🕐", title:"顯示時間範圍",         desc:`目前 ${String(displayRange.start).padStart(2,"0")}:00 – ${String(displayRange.end).padStart(2,"0")}:00` },
@@ -1810,6 +2081,7 @@ export default function CanWe() {
   const [tab, setTab]               = useState("首頁");
   const [events, setEvents]         = useState(SEED_EVENTS);
   const [rules, setRules]           = useState(DEFAULT_RULES);
+  const [recurring, setRecurring]   = useState(DEFAULT_RECURRING);
   const [displayRange, setDisplayRange] = useState({ start: 8, end: 22 }); // default 08–22
   const [toastMsg, setToastMsg]     = useState("");
   const [toastOn, setToastOn]       = useState(false);
@@ -1861,9 +2133,9 @@ export default function CanWe() {
       </div>
 
       <div className="app">
-        {tab==="首頁" && <HomePage events={events} setEvents={setEvents} displayRange={displayRange} toast={toast} />}
+        {tab==="首頁" && <HomePage events={events} displayRange={displayRange} setTab={setTab} toast={toast} />}
         {tab==="行程" && <EventsPage events={events} setEvents={setEvents} displayRange={displayRange} toast={toast} />}
-        {tab==="設定" && <SettingsPage rules={rules} setRules={setRules} events={events} setEvents={setEvents} displayRange={displayRange} setDisplayRange={setDisplayRange} toast={toast} />}
+        {tab==="設定" && <SettingsPage rules={rules} setRules={setRules} events={events} setEvents={setEvents} displayRange={displayRange} setDisplayRange={setDisplayRange} recurring={recurring} setRecurring={setRecurring} toast={toast} />}
       </div>
 
       <nav className="bnav">
