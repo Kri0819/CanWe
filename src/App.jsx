@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── v0.9.2 ────────────────────────────────────────────────────────
-// Structural refactor: components extracted to separate files
+// ─── v0.9.3 ────────────────────────────────────────────────────────
+// WeekView: horizontal bar summary (空閒 Xh / 幾乎忙碌), click → day view
+// ShareSheet week mode: "找我建議" ranked by free time, no grid
 //   components/TimelineBar.jsx  — pure timeline bar display
 //   components/WeekView.jsx     — week grid display + day-click
 //   components/DayView.jsx      — day timeline with drag/resize
@@ -388,304 +389,6 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
   padding: 11px 16px; line-height: 1.8;
 }
 
-/* ── Week grid ── */
-.wk-outer {
-  overflow-x: auto; overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  /* fills the container given to it — EventsPage controls height */
-  flex: 1; min-height: 0;
-}
-.wk-grid {
-  display: grid;
-  grid-template-columns: 26px repeat(7, minmax(44px, 1fr));
-  /* 26px header row + 24 hour rows × 32px */
-  grid-template-rows: 26px repeat(24, 32px);
-  min-width: 340px;
-  min-height: 100%;
-}
-.wk-corner { grid-column: 1; grid-row: 1; }
-.wk-day-hdr {
-  grid-row: 1; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 3px;
-  font-size: 0.6rem; color: var(--muted); font-weight: 400;
-}
-.wk-day-hdr.today { color: var(--accent); }
-.wk-day-hdr.today::after {
-  content: ''; display: block; width: 3px; height: 3px;
-  border-radius: 50%; background: var(--accent); opacity: 0.65; margin-top: 2px;
-}
-.wk-hour-lbl {
-  grid-column: 1; display: flex; align-items: flex-start; justify-content: flex-end;
-  padding-right: 5px; padding-top: 2px;
-  font-size: 0.54rem; color: var(--muted2); font-variant-numeric: tabular-nums; line-height: 1;
-}
-.wk-cell {
-  border-top: 1px solid var(--border); border-left: 1px solid var(--border);
-  position: relative; cursor: default; transition: filter 0.15s;
-}
-.wk-cell:nth-child(8n) { border-right: 1px solid var(--border); }
-.wk-last-row { border-bottom: 1px solid var(--border); }
-.wk-cell.busy    { background: #C98D861E; }
-.wk-cell.urgent  { background: #D6B1831A; }
-.wk-cell.reply   { background: #C8BE971A; }
-.wk-cell.free    { background: #8FA89D1A; }
-.wk-cell.offline { background: transparent; }
-.wk-cell.block-start { border-top-left-radius: 8px; border-top-right-radius: 8px; }
-.wk-cell.block-end   { border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; }
-.wk-cell.today-col {
-  box-shadow: inset 1px 0 0 rgba(58,52,46,0.11), inset -1px 0 0 rgba(58,52,46,0.11);
-}
-.wk-cell.today-col.wk-last-row {
-  box-shadow: inset 1px 0 0 rgba(58,52,46,0.11), inset -1px 0 0 rgba(58,52,46,0.11),
-              inset 0 -1px 0 rgba(58,52,46,0.11);
-}
-.wk-cell:not(.offline):hover { filter: brightness(0.9); }
-
-/* ── View toggle (list / day) ── */
-.view-toggle {
-  display: flex; background: var(--surface2); border-radius: 9px; padding: 3px; gap: 3px;
-}
-.view-toggle-btn {
-  flex: 1; padding: 7px 10px; border: none; border-radius: 7px; cursor: pointer;
-  font-family: var(--font-b); font-size: 0.78rem; font-weight: 400;
-  background: none; color: var(--muted); transition: all 0.16s;
-}
-.view-toggle-btn.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(58,52,46,0.08); }
-
-/* ── Day view timeline ── */
-.dv-container {
-  flex: 1; min-height: 0; overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  padding: 10px 0 8px;
-}
-.dv-wrap {
-  position: relative; display: flex;
-  padding-bottom: 16px;
-}
-.dv-time-col {
-  width: 40px; flex-shrink: 0; position: relative;
-}
-.dv-hour-lbl {
-  position: absolute; right: 10px;
-  font-family: var(--font-b); font-size: 0.62rem; font-weight: 400;
-  color: var(--muted2); font-variant-numeric: tabular-nums;
-  /* vertically centred on the gridline */
-  transform: translateY(-50%);
-  user-select: none; pointer-events: none;
-}
-.dv-col {
-  flex: 1; position: relative;
-  border-left: 1px solid var(--border);
-}
-.dv-gridline {
-  position: absolute; left: 0; right: 0;
-  border-top: 1px solid var(--border);
-  pointer-events: none;
-}
-.dv-gridline.half {
-  border-top-style: dashed; opacity: 0.5;
-}
-/* Event block */
-.dv-event {
-  position: absolute; left: 6px; right: 6px;
-  border-radius: 8px; border-left: 3px solid;
-  padding: 5px 8px; cursor: pointer;
-  display: flex; flex-direction: column; justify-content: flex-start;
-  overflow: hidden; user-select: none;
-  box-shadow: 0 1px 4px rgba(58,52,46,0.08);
-  transition: box-shadow 0.15s, filter 0.15s;
-}
-.dv-event:hover { box-shadow: 0 2px 8px rgba(58,52,46,0.14); }
-.dv-event.dragging { box-shadow: 0 4px 16px rgba(58,52,46,0.2); filter: brightness(0.96); z-index: 10; cursor: grabbing; }
-.dv-event-title {
-  font-family: var(--font-b); font-size: 0.78rem; font-weight: 500;
-  line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.dv-event-time {
-  font-family: var(--font-b); font-size: 0.62rem; font-weight: 400;
-  opacity: 0.75; margin-top: 2px; white-space: nowrap;
-}
-/* Resize handles */
-.dv-resize {
-  position: absolute; left: 0; right: 0; height: 10px;
-  cursor: ns-resize; z-index: 5;
-}
-.dv-resize.top    { top: 0; }
-.dv-resize.bottom { bottom: 0; }
-.dv-resize::after {
-  content: ''; position: absolute; left: 50%; transform: translateX(-50%);
-  width: 24px; height: 3px; border-radius: 2px;
-  background: currentColor; opacity: 0.3;
-}
-.dv-resize.top::after    { top: 3px; }
-.dv-resize.bottom::after { bottom: 3px; }
-/* Now indicator */
-.dv-now-line {
-  position: absolute; left: 0; right: 0; pointer-events: none; z-index: 6;
-}
-.dv-now-line::before {
-  content: ''; display: block; height: 2px; background: var(--c-busy); opacity: 0.7;
-}
-.dv-now-dot {
-  position: absolute; left: -4px; top: -3px;
-  width: 8px; height: 8px; border-radius: 50%; background: var(--c-busy); opacity: 0.8;
-}
-
-/* ── FAB ── */
-.fab {
-  position: fixed; bottom: 88px; right: 16px;
-  width: 48px; height: 48px; border-radius: 50%;
-  background: var(--text); color: var(--bg);
-  border: none; cursor: pointer; font-size: 1.4rem; line-height: 1;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 3px 12px rgba(58,52,46,0.22);
-  transition: transform 0.15s, box-shadow 0.15s;
-  z-index: 40;
-}
-.fab:hover { transform: scale(1.07); box-shadow: 0 5px 18px rgba(58,52,46,0.28); }
-.fab:active { transform: scale(0.95); }
-
-/* ── Share sheet ── */
-.sh-sheet-backdrop {
-  position: fixed; inset: 0; background: rgba(58,52,46,0.22);
-  backdrop-filter: blur(3px); z-index: 150;
-  animation: bdin 0.2s ease both;
-}
-.sh-sheet {
-  position: fixed; bottom: 0; left: 0; right: 0;
-  width: 100%;
-  background: var(--surface); border-radius: 20px 20px 0 0;
-  padding: 20px 22px 44px; display: flex; flex-direction: column; gap: 16px;
-  z-index: 151; animation: slideup 0.28s cubic-bezier(0.16,1,0.3,1) both;
-  max-height: 88dvh; overflow-y: auto;
-}
-.sh-sheet-handle { width: 36px; height: 4px; border-radius: 2px; background: var(--border2); margin: 0 auto -4px; }
-.sh-sheet-title { font-family: var(--font-d); font-style: italic; font-size: 1.15rem; }
-.sh-sheet-tabs { display: flex; background: var(--surface2); border-radius: 9px; padding: 3px; gap: 3px; }
-.sh-sheet-tab {
-  flex: 1; padding: 7px; border: none; border-radius: 7px; cursor: pointer;
-  font-family: var(--font-b); font-size: 0.78rem; background: none; color: var(--muted); transition: all 0.15s;
-}
-.sh-sheet-tab.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(58,52,46,0.08); }
-
-/* Preview content in sheet */
-.sh-preview {
-  background: var(--surface2); border-radius: 12px; padding: 16px;
-  display: flex; flex-direction: column; gap: 8px;
-}
-.sh-preview-header {
-  font-family: var(--font-b); font-size: 0.72rem; font-weight: 500;
-  color: var(--muted); letter-spacing: 0.08em; margin-bottom: 4px;
-}
-.sh-preview-row {
-  display: flex; align-items: center; gap: 12px;
-  padding: 8px 0; border-bottom: 1px solid var(--border);
-}
-.sh-preview-row:last-child { border-bottom: none; }
-.sh-preview-time { font-size: 0.75rem; color: var(--muted); min-width: 100px; font-variant-numeric: tabular-nums; }
-.sh-preview-lbl  { font-size: 0.86rem; font-weight: 500; }
-
-/* Image preview mock */
-.sh-img-mock {
-  background: var(--surface2); border-radius: 12px; padding: 20px 16px;
-  display: flex; flex-direction: column; gap: 10px;
-}
-.sh-img-mock-title {
-  font-family: var(--font-d); font-style: italic; font-size: 1rem; margin-bottom: 4px; color: var(--text);
-}
-.sh-img-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 10px; border-radius: 8px;
-}
-.sh-img-row-time { font-size: 0.72rem; color: var(--muted); min-width: 90px; font-variant-numeric: tabular-nums; }
-.sh-img-row-lbl  { font-size: 0.82rem; font-weight: 500; }
-.sh-privacy { font-size: 0.68rem; color: var(--muted2); text-align: center; line-height: 1.6; }
-.gcal-import-step {
-  display: flex; align-items: flex-start; gap: 12px;
-  padding: 11px 0; border-bottom: 1px solid var(--border);
-}
-.gcal-import-step:last-child { border-bottom: none; }
-.gcal-step-num {
-  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
-  background: var(--surface2); border: 1px solid var(--border2);
-  font-size: 0.68rem; font-weight: 500; color: var(--muted);
-  display: flex; align-items: center; justify-content: center; margin-top: 1px;
-}
-.gcal-step-body { flex: 1; }
-.gcal-step-title { font-size: 0.86rem; font-weight: 500; line-height: 1.4; }
-.gcal-step-desc  { font-size: 0.74rem; color: var(--muted); margin-top: 2px; line-height: 1.55; }
-.gcal-import-preview {
-  background: var(--surface2); border-radius: 10px; padding: 12px 14px;
-  display: flex; flex-direction: column; gap: 8px; margin-top: 4px;
-}
-.gcal-preview-row {
-  display: flex; align-items: center; gap: 10px; font-size: 0.8rem;
-}
-.gcal-preview-time { color: var(--muted); min-width: 90px; font-variant-numeric: tabular-nums; }
-.gcal-preview-title { flex: 1; }
-.gcal-preview-arrow { color: var(--muted2); font-size: 0.7rem; }
-.gcal-preview-status { font-size: 0.74rem; font-weight: 500; }
-.gcal-notice {
-  font-size: 0.71rem; color: var(--muted2); line-height: 1.7;
-  border: 1px solid var(--border); border-radius: 9px; padding: 10px 14px;
-}
-
-/* ── Settings menu ── */
-.settings-menu { display: flex; flex-direction: column; gap: 8px; }
-.settings-row {
-  display: flex; align-items: center; gap: 14px;
-  padding: 14px 18px; background: var(--surface);
-  border: 1px solid var(--border); border-radius: var(--radius);
-  cursor: pointer; transition: border-color 0.15s;
-}
-.settings-row:hover { border-color: var(--border2); }
-.settings-row-icon {
-  width: 36px; height: 36px; border-radius: 9px; background: var(--surface2);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1rem; flex-shrink: 0;
-}
-.settings-row-body { flex: 1; }
-.settings-row-title { font-size: 0.9rem; font-weight: 500; }
-.settings-row-desc  { font-size: 0.73rem; color: var(--muted); margin-top: 2px; }
-.settings-row-arrow { color: var(--muted2); font-size: 0.85rem; }
-.settings-back {
-  display: flex; align-items: center; gap: 8px;
-  background: none; border: none; cursor: pointer;
-  font-family: var(--font-b); font-size: 0.82rem; color: var(--muted);
-  padding: 0; margin-bottom: 18px; transition: color 0.15s;
-}
-.settings-back:hover { color: var(--text); }
-
-/* Status editor */
-.status-editor-row {
-  display: flex; align-items: center; gap: 12px;
-  padding: 12px 0; border-bottom: 1px solid var(--border);
-}
-.status-editor-row:last-child { border-bottom: none; }
-.status-color-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
-.status-name-input {
-  flex: 1; background: none; border: none; outline: none;
-  font-family: var(--font-b); font-size: 0.88rem; font-weight: 500; color: var(--text);
-  padding: 4px 0; border-bottom: 1px solid transparent; transition: border-color 0.15s;
-}
-.status-name-input:focus { border-bottom-color: var(--accent); }
-.status-desc-input {
-  width: 100%; background: var(--surface2); border: 1px solid var(--border2); border-radius: 8px;
-  font-family: var(--font-b); font-size: 0.78rem; color: var(--muted);
-  padding: 6px 10px; outline: none; margin-top: 4px; transition: border-color 0.15s;
-}
-.status-desc-input:focus { border-color: var(--accent); }
-
-/* Time range picker */
-.time-range-row {
-  display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
-}
-.time-range-label { font-size: 0.82rem; font-weight: 500; min-width: 52px; }
-.time-range-select {
-  background: var(--surface2); border: 1px solid var(--border2); border-radius: 8px;
-  color: var(--text); font-family: var(--font-b); font-size: 0.85rem;
-  padding: 8px 12px; cursor: pointer; outline: none; flex: 1;
-}
 
 /* ── Settings ── */
 .sec-head { font-size: 0.68rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted2); margin-bottom: 10px; font-weight: 400; }
@@ -906,54 +609,86 @@ function TimelineBar({ blocks }) {
 const GRID_START = 0, GRID_END = 24;
 const GRID_HOURS = Array.from({ length: GRID_END - GRID_START }, (_,i) => i);
 
-// ─── WeekView — extracted to components/WeekView.jsx ──────────────
-function WeekGrid({ weekEvents, rangeStart = GRID_START, rangeEnd = GRID_END, onDayClick }) {
+// ─── Week summary helpers ─────────────────────────────────────────
+function getDaySummary(dayEvents, rangeStart, rangeEnd) {
+  const blocks = buildBlocks(dayEvents);
+  const visible = blocks.filter(b => b.end > rangeStart && b.start < rangeEnd);
+  let freeH = 0, busyH = 0, replyH = 0;
+  for (const b of visible) {
+    const h = Math.min(b.end, rangeEnd) - Math.max(b.start, rangeStart);
+    if (b.status === "free")   freeH  += h;
+    else if (b.status === "reply") replyH += h;
+    else if (b.status === "busy" || b.status === "urgent") busyH += h;
+  }
+  const label =
+    freeH >= 5     ? `空閒 ${freeH}h` :
+    busyH >= 8     ? "幾乎全忙" :
+    freeH > 0      ? `空閒 ${freeH}h` :
+    replyH > 0     ? `可回訊息 ${replyH}h` : "休息中";
+  return { freeH, busyH, replyH, score: freeH * 3 + replyH * 2, label, blocks: visible };
+}
+
+// Rank days: best → good → ok → busy
+function getWeekRecommendations(weekEvents, rangeStart, rangeEnd) {
+  const summaries = weekEvents.map((evs, di) => ({
+    di, ...getDaySummary(evs || [], rangeStart, rangeEnd)
+  }));
+  const best = summaries.filter(d => d.freeH  >= 4);
+  const good = summaries.filter(d => d.freeH  >= 1 && d.freeH < 4);
+  const ok   = summaries.filter(d => d.replyH >= 2 && d.freeH === 0);
+  const busy = summaries.filter(d => d.busyH  >= 6 && d.freeH === 0 && d.replyH === 0);
+  return { best, good, ok, busy };
+}
+
+// ─── WeekView — horizontal bar summary ────────────────────────────
+function WeekGrid({ weekEvents, rangeStart = 8, rangeEnd = 22, onDayClick }) {
   const todayIdx = (new Date().getDay() + 6) % 7;
-  const hourMaps = weekEvents.map(evs => buildHourMap(buildBlocks(evs)));
-  const gridHours = Array.from({ length: rangeEnd - rangeStart }, (_, i) => rangeStart + i);
   return (
-    <div className="wk-outer">
-      <div className="wk-grid" style={{ gridTemplateRows: `26px repeat(${rangeEnd - rangeStart}, 32px)` }}>
-        <div className="wk-corner" />
-        {WEEK_DAYS.map((day, di) => (
-          <div key={di}
-            className={`wk-day-hdr ${di===todayIdx?"today":""}`}
-            style={ onDayClick ? { cursor:"pointer" } : {} }
-            onClick={() => onDayClick && onDayClick(di)}>
-            週{day}
+    <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+      {WEEK_DAYS.map((day, di) => {
+        const sum     = getDaySummary(weekEvents[di] || [], rangeStart, rangeEnd);
+        const isToday = di === todayIdx;
+        const span    = rangeEnd - rangeStart;
+        return (
+          <div key={di} onClick={() => onDayClick && onDayClick(di)}
+            style={{
+              display:"flex", alignItems:"center", gap:12, padding:"10px 14px",
+              borderRadius:10, cursor: onDayClick ? "pointer" : "default",
+              border:`1px solid ${isToday ? "var(--accent)" : "var(--border)"}`,
+              background: isToday ? "rgba(124,111,98,0.06)" : "var(--surface)",
+              transition:"border-color 0.15s",
+            }}>
+            <div style={{ width:28, flexShrink:0,
+              fontFamily:"var(--font-b)", fontSize:"0.78rem",
+              fontWeight: isToday ? 600 : 400,
+              color: isToday ? "var(--accent)" : "var(--text)" }}>
+              週{day}
+            </div>
+            <div style={{ flex:1, height:10, borderRadius:4, overflow:"hidden",
+              background:"var(--surface2)", position:"relative" }}>
+              {sum.blocks.map((b, i) => {
+                const left  = ((Math.max(b.start, rangeStart) - rangeStart) / span) * 100;
+                const width = ((Math.min(b.end, rangeEnd) - Math.max(b.start, rangeStart)) / span) * 100;
+                return (
+                  <div key={i} style={{
+                    position:"absolute", top:0, bottom:0,
+                    left:`${left}%`, width:`${width}%`,
+                    background: STATUS[b.status].barColor,
+                  }} />
+                );
+              })}
+            </div>
+            <div style={{ fontSize:"0.72rem", color:"var(--muted)", minWidth:64,
+              textAlign:"right", fontFamily:"var(--font-b)" }}>
+              {sum.label}
+            </div>
+            {onDayClick && <span style={{ color:"var(--muted2)", fontSize:"0.8rem" }}>›</span>}
           </div>
-        ))}
-        {gridHours.map((h, hi) => {
-          const isLast = hi === gridHours.length - 1;
-          return [
-            <div key={`l${h}`} className="wk-hour-lbl" style={{ gridRow:hi+2, gridColumn:1 }}>
-              {String(h).padStart(2,"0")}
-            </div>,
-            ...WEEK_DAYS.map((_, di) => {
-              const status = hourMaps[di][h] || "offline";
-              const prev   = hi > 0 ? (hourMaps[di][gridHours[hi-1]] || "offline") : null;
-              const next   = hi < gridHours.length-1 ? (hourMaps[di][gridHours[hi+1]] || "offline") : null;
-              const cls = ["wk-cell", status,
-                status !== prev ? "block-start" : "",
-                status !== next ? "block-end"   : "",
-                di === todayIdx ? "today-col"   : "",
-                isLast ? "wk-last-row" : "",
-              ].filter(Boolean).join(" ");
-              return (
-                <div key={`${di}-${h}`} className={cls}
-                  style={{ gridRow:hi+2, gridColumn:di+2 }}
-                  onClick={() => onDayClick && onDayClick(di)}
-                  title={`週${WEEK_DAYS[di]}\n${fmt(h)}–${fmt(h+1)}\n${STATUS[status].label}`}
-                />
-              );
-            }),
-          ];
-        })}
-      </div>
+        );
+      })}
     </div>
   );
 }
-
 // ─── Event modal (add / edit) ──────────────────────────────────────
 function EventModal({ event, onSave, onClose }) {
   const isEdit = !!event?.id;
@@ -1079,7 +814,7 @@ function ShareSheet({ events, onClose, toast, mode = "today" }) {
 
         {/* Title */}
         <div>
-          <div className="sh-sheet-title">{isWeek ? "分享這週行程" : "分享今日行程"}</div>
+          <div className="sh-sheet-title">{isWeek ? "找我建議" : "分享今日行程"}</div>
           <div style={{ fontSize:"0.74rem", color:"var(--muted)", marginTop:3 }}>
             對方看到的樣子
           </div>
@@ -1098,9 +833,37 @@ function ShareSheet({ events, onClose, toast, mode = "today" }) {
           </div>
 
           {isWeek ? (
-            /* Week grid preview */
-            <div style={{ overflowX:"auto" }}>
-              <WeekGrid weekEvents={weekEvents} rangeStart={8} rangeEnd={22} />
+            /* 找我建議 — ranked by free time */
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              {(() => {
+                const rec = getWeekRecommendations(weekEvents, 8, 22);
+                const sections = [
+                  { label:"🟢 最推薦",  days: rec.best, color:"var(--c-free)"    },
+                  { label:"🟢 推薦",    days: rec.good, color:"var(--c-reply)"   },
+                  { label:"🟡 可以找",  days: rec.ok,   color:"var(--c-reply)"   },
+                  { label:"🔴 較不建議",days: rec.busy, color:"var(--c-busy)"    },
+                ].filter(s => s.days.length > 0);
+                return sections.map(sec => (
+                  <div key={sec.label}>
+                    <div style={{ fontSize:"0.72rem", fontWeight:500, color:sec.color,
+                      marginBottom:5, letterSpacing:"0.04em" }}>
+                      {sec.label}
+                    </div>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                      {sec.days.map(d => (
+                        <div key={d.di} style={{
+                          padding:"5px 12px", borderRadius:99,
+                          background:"var(--surface2)", border:"1px solid var(--border2)",
+                          fontSize:"0.8rem", fontFamily:"var(--font-b)", color:"var(--text)",
+                        }}>
+                          週{WEEK_DAYS[d.di]}
+                          {d.freeH > 0 && <span style={{ color:"var(--muted)", marginLeft:4 }}>{d.freeH}h空閒</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ));
+              })()}
             </div>
           ) : (
             <>
@@ -1444,11 +1207,12 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
 
       {/* Header */}
       <div style={{ padding:"16px 22px 0", flexShrink:0 }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+        <div style={{ marginBottom:12 }}>
           {view === "day" ? (
-            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-              <button className="btn-outline" style={{ padding:"5px 10px", fontSize:"0.8rem" }} onClick={() => shiftDay(-1)}>‹</button>
-              <div>
+            /* Date centred, arrows on each side */
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <button className="btn-outline" style={{ padding:"5px 14px", fontSize:"1rem" }} onClick={() => shiftDay(-1)}>‹</button>
+              <div style={{ textAlign:"center" }}>
                 <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.15rem" }}>{viewDateLabel}</div>
                 {!isToday && (
                   <button onClick={() => setViewDate(dateStr())}
@@ -1457,7 +1221,7 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
                   </button>
                 )}
               </div>
-              <button className="btn-outline" style={{ padding:"5px 10px", fontSize:"0.8rem" }} onClick={() => shiftDay(1)}>›</button>
+              <button className="btn-outline" style={{ padding:"5px 14px", fontSize:"1rem" }} onClick={() => shiftDay(1)}>›</button>
             </div>
           ) : (
             <div>
@@ -1465,7 +1229,6 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
               <div style={{ fontSize:"0.72rem", color:"var(--muted)", marginTop:2 }}>{getWeekHeader()}</div>
             </div>
           )}
-          <button className="btn-outline" onClick={() => setModal("add")}>＋ 新增</button>
         </div>
         <div className="view-toggle" style={{ marginBottom:10 }}>
           <button className={`view-toggle-btn ${view==="day"?"on":""}`} onClick={() => setView("day")}>日</button>
@@ -1482,12 +1245,9 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
           </div>
         )}
         {view === "week" && (
-          <div style={{ flex:1, minHeight:0, overflowY:"auto", overflowX:"auto", padding:"4px 22px 8px" }}>
+          <div style={{ flex:1, minHeight:0, overflowY:"auto", padding:"8px 22px 16px" }}>
             <WeekGrid weekEvents={weekEvents} rangeStart={displayRange.start} rangeEnd={displayRange.end}
               onDayClick={handleWeekCellClick} />
-            <div style={{ fontSize:"0.69rem", color:"var(--muted2)", textAlign:"center", marginTop:8 }}>
-              點擊任一欄位切換到日視圖
-            </div>
           </div>
         )}
       </div>
