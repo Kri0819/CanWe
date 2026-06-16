@@ -1209,7 +1209,6 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
       <div style={{ padding:"16px 22px 0", flexShrink:0 }}>
         <div style={{ marginBottom:12 }}>
           {view === "day" ? (
-            /* Date centred, arrows on each side */
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
               <button className="btn-outline" style={{ padding:"5px 14px", fontSize:"1rem" }} onClick={() => shiftDay(-1)}>‹</button>
               <div style={{ textAlign:"center" }}>
@@ -1224,9 +1223,16 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
               <button className="btn-outline" style={{ padding:"5px 14px", fontSize:"1rem" }} onClick={() => shiftDay(1)}>›</button>
             </div>
           ) : (
-            <div>
-              <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.15rem" }}>本週</div>
-              <div style={{ fontSize:"0.72rem", color:"var(--muted)", marginTop:2 }}>{getWeekHeader()}</div>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <div>
+                <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.15rem" }}>本週</div>
+                <div style={{ fontSize:"0.72rem", color:"var(--muted)", marginTop:2 }}>{getWeekHeader()}</div>
+              </div>
+              {/* Share buttons in header for week view */}
+              <div style={{ display:"flex", gap:6 }}>
+                <button className="btn-outline" style={{ fontSize:"0.75rem", padding:"5px 10px" }} onClick={() => setShareOpen("today")}>↗ 今日</button>
+                <button className="btn-outline" style={{ fontSize:"0.75rem", padding:"5px 10px" }} onClick={() => setShareOpen("week")}>↗ 本週</button>
+              </div>
             </div>
           )}
         </div>
@@ -1236,7 +1242,7 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
         </div>
       </div>
 
-      {/* Body */}
+      {/* Body — full remaining height */}
       <div style={{ flex:1, minHeight:0, display:"flex", flexDirection:"column" }}>
         {view === "day" && (
           <div style={{ flex:1, minHeight:0, display:"flex", flexDirection:"column", padding:"0 12px 4px" }}>
@@ -1252,13 +1258,17 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
         )}
       </div>
 
-      {/* Dual share buttons */}
-      <div style={{ padding:"8px 22px 12px", flexShrink:0, display:"flex", gap:10 }}>
-        <button className="btn btn-g" style={{ flex:1 }} onClick={() => setShareOpen("today")}>↗ 分享今日</button>
-        <button className="btn btn-g" style={{ flex:1 }} onClick={() => setShareOpen("week")}>↗ 分享本週</button>
-      </div>
-
-      <button className="fab" onClick={() => setModal("add")} title="新增事件">＋</button>
+      {/* FAB — day view: share + add; week view: add only */}
+      {view === "day" && (
+        <div style={{ position:"fixed", bottom:80, right:16, display:"flex", flexDirection:"column", gap:8, zIndex:40 }}>
+          <button className="fab" style={{ width:44, height:44, fontSize:"1rem" }}
+            onClick={() => setShareOpen("today")} title="分享今日">↗</button>
+          <button className="fab" onClick={() => setModal("add")} title="新增事件">＋</button>
+        </div>
+      )}
+      {view === "week" && (
+        <button className="fab" onClick={() => setModal("add")} title="新增事件">＋</button>
+      )}
 
       {modal && <EventModal event={modal==="add"?{ date:viewDate }:modal} onSave={handleSave} onClose={() => setModal(null)} />}
       {shareOpen && <ShareSheet events={events} toast={toast} mode={shareOpen} onClose={() => setShareOpen(null)} />}
