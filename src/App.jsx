@@ -474,6 +474,28 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
   background: var(--surface2); color: var(--muted); border: 1px solid var(--border);
 }
 
+/* ── Day view timeline ── */
+.dv-container { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 10px 0 8px; }
+.dv-wrap { position: relative; display: flex; padding-bottom: 16px; }
+.dv-time-col { width: 40px; flex-shrink: 0; position: relative; }
+.dv-hour-lbl { position: absolute; right: 8px; font-family: var(--font-b); font-size: 0.6rem; color: var(--muted2); font-variant-numeric: tabular-nums; transform: translateY(-50%); user-select: none; pointer-events: none; }
+.dv-col { flex: 1; position: relative; border-left: 1px solid var(--border); }
+.dv-gridline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--border); pointer-events: none; }
+.dv-gridline.half { border-top-style: dashed; opacity: 0.5; }
+.dv-event { position: absolute; left: 6px; right: 6px; border-radius: 8px; border-left: 3px solid; padding: 5px 8px; cursor: pointer; display: flex; flex-direction: column; overflow: hidden; user-select: none; box-shadow: 0 1px 4px rgba(58,52,46,0.08); }
+.dv-event-title { font-family: var(--font-b); font-size: 0.78rem; font-weight: 500; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dv-event-time  { font-family: var(--font-b); font-size: 0.62rem; opacity: 0.75; margin-top: 2px; }
+.dv-resize { position: absolute; left: 0; right: 0; height: 10px; cursor: ns-resize; z-index: 5; }
+.dv-resize.top { top: 0; } .dv-resize.bottom { bottom: 0; }
+.dv-now-line { position: absolute; left: 0; right: 0; pointer-events: none; z-index: 6; }
+.dv-now-line::before { content: ''; display: block; height: 2px; background: var(--c-busy); opacity: 0.7; }
+.dv-now-dot { position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--c-busy); }
+
+/* ── FAB ── */
+.fab { position: fixed; bottom: 88px; right: 16px; width: 48px; height: 48px; border-radius: 50%; background: var(--text); color: var(--bg); border: none; cursor: pointer; font-size: 1.4rem; display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 12px rgba(58,52,46,0.22); transition: transform 0.15s, box-shadow 0.15s; z-index: 40; }
+.fab:hover { transform: scale(1.07); }
+.fab:active { transform: scale(0.95); }
+
 /* ── Onboarding overlay ── */
 .ob-overlay {
   position: fixed; inset: 0; background: var(--bg); z-index: 200;
@@ -1249,7 +1271,6 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
                 <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.15rem" }}>本週</div>
                 <div style={{ fontSize:"0.72rem", color:"var(--muted)", marginTop:2 }}>{getWeekHeader()}</div>
               </div>
-              {/* Share buttons in header for week view */}
               <div style={{ display:"flex", gap:6 }}>
                 <button className="btn-outline" style={{ fontSize:"0.75rem", padding:"5px 10px" }} onClick={() => setShareOpen("today")}>↗ 今日</button>
                 <button className="btn-outline" style={{ fontSize:"0.75rem", padding:"5px 10px" }} onClick={() => setShareOpen("week")}>↗ 本週</button>
@@ -1279,17 +1300,8 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
         )}
       </div>
 
-      {/* FAB — day view: share + add; week view: add only */}
-      {view === "day" && (
-        <div style={{ position:"fixed", bottom:80, right:16, display:"flex", flexDirection:"column", gap:8, zIndex:40 }}>
-          <button className="fab" style={{ width:44, height:44, fontSize:"1rem" }}
-            onClick={() => setShareOpen("today")} title="分享今日">↗</button>
-          <button className="fab" onClick={() => setModal("add")} title="新增事件">＋</button>
-        </div>
-      )}
-      {view === "week" && (
-        <button className="fab" onClick={() => setModal("add")} title="新增事件">＋</button>
-      )}
+      {/* FAB — always bottom-right, both views */}
+      <button className="fab" onClick={() => setModal("add")} title="新增事件">＋</button>
 
       {modal && <EventModal event={modal==="add"?{ date:viewDate }:modal} onSave={handleSave} onClose={() => setModal(null)} />}
       {shareOpen && <ShareSheet events={events} toast={toast} mode={shareOpen} onClose={() => setShareOpen(null)} />}
