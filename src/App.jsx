@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── v0.9.4 ────────────────────────────────────────────────────────
+// ─── v0.9.5 ────────────────────────────────────────────────────────
+// [1] view-toggle: rectangular segmented control
+// [2] share button: today view→分享今日, week view→分享本週
+// [3] ShareSheet: bottom card with backdrop confirmed
 // Settings: remove emoji icons, restore clean border rows
 //   components/TimelineBar.jsx  — pure timeline bar display
 //   components/WeekView.jsx     — week grid display + day-click
@@ -373,6 +376,19 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
   background: none; color: var(--muted); transition: all 0.16s;
 }
 .sh-tab.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(58,52,46,0.08); }
+
+/* ── View toggle: rectangular segmented control ── */
+.view-toggle {
+  display: flex; border: 1px solid var(--border2); border-radius: 10px;
+  overflow: hidden; background: var(--surface2);
+}
+.view-toggle-btn {
+  flex: 1; padding: 10px 0; border: none; background: none; cursor: pointer;
+  font-family: var(--font-b); font-size: 0.85rem; font-weight: 400;
+  color: var(--muted); transition: all 0.16s; position: relative;
+}
+.view-toggle-btn + .view-toggle-btn { border-left: 1px solid var(--border2); }
+.view-toggle-btn.on { background: var(--surface); color: var(--text); font-weight: 500; }
 .sh-blocks { display: flex; flex-direction: column; gap: 6px; }
 .sh-block {
   display: flex; align-items: center; gap: 12px;
@@ -473,6 +489,20 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
   font-size: 0.68rem; padding: 2px 8px; border-radius: 99px;
   background: var(--surface2); color: var(--muted); border: 1px solid var(--border);
 }
+
+
+/* ── Share bottom sheet ── */
+.sh-sheet-backdrop { position: fixed; inset: 0; background: rgba(58,52,46,0.22); backdrop-filter: blur(3px); z-index: 150; animation: bdin 0.2s ease both; }
+@keyframes bdin { from { opacity:0 } to { opacity:1 } }
+.sh-sheet { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-radius: 20px 20px 0 0; padding: 20px 22px 44px; display: flex; flex-direction: column; gap: 16px; z-index: 151; animation: slideup 0.28s cubic-bezier(0.16,1,0.3,1) both; max-height: 88dvh; overflow-y: auto; }
+@keyframes slideup { from { transform: translateY(100%) } to { transform: none } }
+.sh-sheet-handle { width: 36px; height: 4px; border-radius: 2px; background: var(--border2); margin: 0 auto -4px; }
+.sh-sheet-title { font-family: var(--font-d); font-style: italic; font-size: 1.15rem; }
+.sh-preview { background: var(--surface2); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.sh-preview-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.sh-preview-row:last-child { border-bottom: none; }
+.sh-preview-time { font-size: 0.75rem; color: var(--muted); min-width: 100px; font-variant-numeric: tabular-nums; }
+.sh-preview-lbl  { font-size: 0.86rem; font-weight: 500; }
 
 /* ── Day view timeline ── */
 .dv-container { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 10px 0 8px; }
@@ -1263,7 +1293,7 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
                   </button>
                 )}
               </div>
-              <button className="btn-outline" style={{ padding:"5px 14px", fontSize:"1rem" }} onClick={() => shiftDay(1)}>›</button>
+              <button className="btn-outline" style={{ fontSize:"0.75rem", padding:"5px 10px" }} onClick={() => setShareOpen("today")}>↗ 分享</button>
             </div>
           ) : (
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
@@ -1271,10 +1301,7 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
                 <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.15rem" }}>本週</div>
                 <div style={{ fontSize:"0.72rem", color:"var(--muted)", marginTop:2 }}>{getWeekHeader()}</div>
               </div>
-              <div style={{ display:"flex", gap:6 }}>
-                <button className="btn-outline" style={{ fontSize:"0.75rem", padding:"5px 10px" }} onClick={() => setShareOpen("today")}>↗ 今日</button>
-                <button className="btn-outline" style={{ fontSize:"0.75rem", padding:"5px 10px" }} onClick={() => setShareOpen("week")}>↗ 本週</button>
-              </div>
+              <button className="btn-outline" style={{ fontSize:"0.75rem", padding:"5px 10px" }} onClick={() => setShareOpen("week")}>↗ 分享</button>
             </div>
           )}
         </div>
