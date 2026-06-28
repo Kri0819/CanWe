@@ -1,7 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── v0.9.6 ────────────────────────────────────────────────────────
+// ─── v0.9.7 ────────────────────────────────────────────────────────
+// DayView 拆分為獨立元件：
+//   DayView.jsx      — 組合元件（scroll、range 計算）
+//   DayTimeline.jsx  — 格線、小時標籤、現在線
+//   DayEvent.jsx     — 事件卡片（顯示 + drag handles）
+//   useDayDrag.js    — Drag / Resize hook（所有互動邏輯）
 // 日/週/月 切換小框框，日期列置中導覽，新增月視圖
+// Google Calendar 完整抽離至 GoogleCalendarService.js + GoogleCalendarImport.jsx
 // Settings: remove emoji icons, restore clean border rows
 //   components/TimelineBar.jsx  — pure timeline bar display
 //   components/WeekView.jsx     — week grid display + day-click
@@ -1159,6 +1165,9 @@ function minsToISO(mins) {
 }
 
 // ─── DayView — extracted to components/DayView.jsx ────────────────
+// ─── DayView — split into DayView.jsx + DayTimeline.jsx + DayEvent.jsx + useDayDrag.js ──
+// In multi-file project: import DayView from './DayView.jsx'
+// Inline below for single-file build compatibility.
 function DayView({ events, setEvents, onEdit, rangeStart = 8, rangeEnd = 22 }) {
   const colRef       = useRef(null);
   const containerRef = useRef(null);
@@ -1478,48 +1487,41 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
 }
 
 
-// All OAuth / fetch / convert / dedup logic lives in calendarSync.js
-// App.jsx exposes only syncCalendar() — GcalSettings calls this and nothing else.
+// ─── Google Calendar Service ───────────────────────────────────────
+// In multi-file project: import { GoogleCalendarService } from './GoogleCalendarService.js'
+// In multi-file project: import GoogleCalendarImport from './GoogleCalendarImport.jsx'
 //
-// In the full project, import from '/lib/calendarSync.js':
-//   import { syncCalendar, adjustEventStatus } from '../lib/calendarSync.js'
-//
-// Inline stub (mirrors calendarSync.js exports exactly):
-const { syncCalendar, adjustEventStatus } = (() => {
+// Inline stub — mirrors GoogleCalendarService.js exports exactly.
+// OAuth / fetch / convert / dedup logic lives in GoogleCalendarService.js.
+// Main app (Home, DayView, WeekView, EventModal) never references this directly.
+const GoogleCalendarService = (() => {
   function _todayAt(h) { const d = new Date(); d.setHours(h,0,0,0); return d.toISOString(); }
+  let _counter = 1000;
 
-  // Mirrors calendarSync._oauthConnect + _fetchRawEvents + _convertEvent + _dedup
-  async function syncCalendar(rules, existingEvents) {
-    // Simulate OAuth + fetch
+  async function connect(existingEvents = [], rules = []) {
+    // TODO: replace with real OAuth → _oauthConnect() in GoogleCalendarService.js
     const raw = await new Promise(resolve => setTimeout(() => resolve([
       { gcalId:"gc1", title:"社區訪視",   startTime:_todayAt(9),  endTime:_todayAt(12) },
       { gcalId:"gc2", title:"個案會議",   startTime:_todayAt(13), endTime:_todayAt(15) },
       { gcalId:"gc3", title:"寫個案紀錄", startTime:_todayAt(15), endTime:_todayAt(17) },
       { gcalId:"gc4", title:"自由時間",   startTime:_todayAt(19), endTime:_todayAt(21) },
     ]), 1400));
-    // Convert: apply rules, add CanWe fields
-    let counter = 200;
     const proposed = raw.map(ev => ({
-      id:        "gcal_" + (++counter),
-      gcalId:    ev.gcalId,
-      title:     ev.title,
-      date:      dateStr(new Date(ev.startTime)),
-      startTime: ev.startTime,
-      endTime:   ev.endTime,
-      note:      "",
-      status:    guessStatus(ev.title),
-      source:    "google",
+      id: "gcal_" + (++_counter), gcalId: ev.gcalId, title: ev.title,
+      date: dateStr(new Date(ev.startTime)), startTime: ev.startTime,
+      endTime: ev.endTime, note: "", status: guessStatus(ev.title), source: "google",
     }));
-    // Dedup
     const importedIds = new Set(existingEvents.filter(e => e.source === "google").map(e => e.gcalId));
     return proposed.filter(ev => !importedIds.has(ev.gcalId));
   }
 
-  function adjustEventStatus(proposed, gcalId, status) {
+  function adjustStatus(proposed, gcalId, status) {
     return proposed.map(ev => ev.gcalId === gcalId ? { ...ev, status } : ev);
   }
 
-  return { syncCalendar, adjustEventStatus };
+  function disconnect() {}
+
+  return { connect, adjustStatus, disconnect };
 })();
 
 // ─── Settings sub-pages ────────────────────────────────────────────
@@ -1678,8 +1680,10 @@ function TimeRangeSettings({ displayRange, setDisplayRange, onBack, toast }) {
 }
 
 // Sub-page: Google Calendar 匯入
-// GcalSettings manages UI state only.
-// All sync logic (OAuth, fetch, convert, dedup) is in syncCalendar() → calendarSync.js
+// GcalSettings is a thin shell — all logic lives in:
+//   GoogleCalendarService.js  (OAuth, fetch, convert, dedup)
+//   GoogleCalendarImport.jsx  (UI states: idle/connecting/preview/imported)
+// This function only wires onImport → setEvents.
 function GcalSettings({ events, setEvents, onBack, toast }) {
   const [gcalState, setGcalState] = useState("idle");
   const [preview, setPreview]     = useState([]);
@@ -1687,7 +1691,7 @@ function GcalSettings({ events, setEvents, onBack, toast }) {
   const connectGoogle = async () => {
     setGcalState("connecting");
     try {
-      const proposed = await syncCalendar([], events); // rules param: [] uses default guessStatus
+      const proposed = await GoogleCalendarService.connect(events, []);
       setPreview(proposed);
       setGcalState("preview");
     } catch (_) {
@@ -1697,15 +1701,15 @@ function GcalSettings({ events, setEvents, onBack, toast }) {
   };
 
   const handleAdjustStatus = (gcalId, status) =>
-    setPreview(p => adjustEventStatus(p, gcalId, status));
+    setPreview(p => GoogleCalendarService.adjustStatus(p, gcalId, status));
 
   const confirmImport = () => {
-    setEvents(prev => [...prev, ...preview]);
+    setEvents(prev => [...prev, ...preview]);  // ← only line that touches App state
     setGcalState("imported");
     toast(`已匯入 ${preview.length} 個事件 ✓`);
   };
 
-  const disconnect = () => { setGcalState("idle"); setPreview([]); };
+  const disconnect = () => { GoogleCalendarService.disconnect(); setGcalState("idle"); setPreview([]); };
 
   const STATUS_OPTIONS = STATUS_KEYS.map(k => ({ value: k, label: `${STATUS[k].emoji} ${STATUS[k].label}` }));
 
