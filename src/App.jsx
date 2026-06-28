@@ -1,9 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── v0.9.5 ────────────────────────────────────────────────────────
-// [1] view-toggle: rectangular segmented control
-// [2] share button: today view→分享今日, week view→分享本週
-// [3] ShareSheet: bottom card with backdrop confirmed
+// ─── v0.9.6 ────────────────────────────────────────────────────────
+// 日/週/月 切換小框框，日期列置中導覽，新增月視圖
 // Settings: remove emoji icons, restore clean border rows
 //   components/TimelineBar.jsx  — pure timeline bar display
 //   components/WeekView.jsx     — week grid display + day-click
@@ -211,12 +209,12 @@ html, body {
 }
 .bnav-tab {
   flex: 1; border: none; background: none; cursor: pointer;
-  padding: 10px 4px 12px; display: flex; flex-direction: column; align-items: center; gap: 3px;
-  font-family: var(--font-b); font-size: 0.65rem; font-weight: 400;
+  padding: 14px 4px 18px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  font-family: var(--font-b); font-size: 0.7rem; font-weight: 400;
   color: var(--muted2); transition: color 0.16s;
 }
 .bnav-tab.on { color: var(--text); }
-.bnav-tab svg { width: 20px; height: 20px; stroke-width: 1.5; }
+.bnav-tab svg { width: 24px; height: 24px; stroke-width: 1.5; }
 
 /* ── Page header ── */
 .page-header {
@@ -379,16 +377,57 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
 
 /* ── View toggle: rectangular segmented control ── */
 .view-toggle {
-  display: flex; border: 1px solid var(--border2); border-radius: 10px;
-  overflow: hidden; background: var(--surface2);
+  display: flex; background: var(--surface2); border-radius: 10px;
+  padding: 3px; gap: 3px; width: fit-content; align-self: center;
 }
 .view-toggle-btn {
-  flex: 1; padding: 10px 0; border: none; background: none; cursor: pointer;
-  font-family: var(--font-b); font-size: 0.85rem; font-weight: 400;
-  color: var(--muted); transition: all 0.16s; position: relative;
+  padding: 6px 18px; border: none; background: none; cursor: pointer;
+  font-family: var(--font-b); font-size: 0.82rem; font-weight: 400;
+  color: var(--muted); border-radius: 8px; transition: all 0.16s; white-space: nowrap;
 }
-.view-toggle-btn + .view-toggle-btn { border-left: 1px solid var(--border2); }
-.view-toggle-btn.on { background: var(--surface); color: var(--text); font-weight: 500; }
+.view-toggle-btn.on {
+  background: var(--surface); color: var(--text); font-weight: 500;
+  box-shadow: 0 1px 4px rgba(58,52,46,0.10);
+}
+
+/* ── Date nav row ── */
+.date-nav-row {
+  display: flex; align-items: center; justify-content: center; gap: 16px;
+  padding: 6px 0;
+}
+.date-nav-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 1rem; color: var(--muted); padding: 4px 8px;
+  transition: color 0.15s;
+}
+.date-nav-btn:hover { color: var(--text); }
+.date-nav-label {
+  font-family: var(--font-b); font-size: 0.95rem; font-weight: 500;
+  color: var(--text); min-width: 130px; text-align: center;
+}
+
+/* ── Month view ── */
+.mv-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+}
+.mv-day-hdr {
+  text-align: center; font-size: 0.65rem; color: var(--muted2); padding: 4px 0;
+  font-family: var(--font-b);
+}
+.mv-cell {
+  aspect-ratio: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: flex-start;
+  padding: 4px 2px; border-radius: 8px; cursor: pointer;
+  transition: background 0.14s; position: relative;
+}
+.mv-cell:hover { background: var(--surface2); }
+.mv-cell.today { background: var(--surface2); }
+.mv-cell.today .mv-date { background: var(--text); color: var(--bg); border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
+.mv-cell.other-month .mv-date { color: var(--muted2); }
+.mv-date { font-size: 0.78rem; font-family: var(--font-b); color: var(--text); width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
+.mv-dots { display: flex; gap: 2px; margin-top: 2px; flex-wrap: wrap; justify-content: center; }
+.mv-dot { width: 5px; height: 5px; border-radius: 50%; }
+.mv-selected { outline: 2px solid var(--accent); outline-offset: 1px; }
 .sh-blocks { display: flex; flex-direction: column; gap: 6px; }
 .sh-block {
   display: flex; align-items: center; gap: 12px;
@@ -456,6 +495,20 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
   padding: 0; margin-bottom: 18px; transition: color 0.15s;
 }
 .settings-back:hover { color: var(--text); }
+
+/* ── Status editor ── */
+.status-editor-row { display: flex; align-items: flex-start; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.status-editor-row:last-child { border-bottom: none; }
+.status-color-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 8px; }
+.status-name-input { flex: 1; background: none; border: none; outline: none; font-family: var(--font-b); font-size: 0.9rem; font-weight: 500; color: var(--text); padding: 4px 0; border-bottom: 1px solid transparent; transition: border-color 0.15s; }
+.status-name-input:focus { border-bottom-color: var(--accent); }
+.status-desc-input { width: 100%; background: var(--surface2); border: 1px solid var(--border2); border-radius: 7px; font-family: var(--font-b); font-size: 0.78rem; color: var(--muted); padding: 6px 10px; outline: none; margin-top: 4px; transition: border-color 0.15s; }
+.status-desc-input:focus { border-color: var(--accent); }
+
+/* ── Time range picker ── */
+.time-range-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.time-range-label { font-size: 0.82rem; font-weight: 500; min-width: 52px; }
+.time-range-select { background: var(--surface2); border: 1px solid var(--border2); border-radius: 8px; color: var(--text); font-family: var(--font-b); font-size: 0.85rem; padding: 8px 12px; cursor: pointer; outline: none; flex: 1; }
 
 /* ── Recurring schedule ── */
 .recur-row {
@@ -1020,61 +1073,66 @@ function HomePage({ events, displayRange, setTab, toast }) {
   });
 
   return (
-    <div className="page" style={{ paddingTop:26 }}>
-      {/* Date header */}
-      <div>
-        <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.5rem", letterSpacing:"-0.01em" }}>
-          今天
-        </div>
-        <div style={{ fontSize:"0.82rem", color:"var(--muted)", marginTop:2 }}>
-          {fmtDateLabel()}
-        </div>
-      </div>
+    <div style={{ display:"flex", flexDirection:"column", height:"calc(100dvh - 64px)", overflow:"hidden" }}>
 
-      {/* Status card — hero */}
-      <div className="card">
-        <div className="card-label">現在</div>
-        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-          <Pip status={nowStatus} size="md" />
-          <div>
-            <div style={{ fontFamily:"var(--font-b)", fontWeight:500, fontSize:"1.4rem", letterSpacing:"-0.01em", color:s.color }}>
-              {s.label}
-            </div>
-            {nowBlock && nowStatus !== "offline" && (
-              <div style={{ fontSize:"0.75rem", color:"var(--muted)", marginTop:2 }}>
-                到 {fmt(nowBlock.end)} 為止
-                {currentEv && ` · ${currentEv.title}`}
+      {/* Scrollable content */}
+      <div style={{ flex:1, overflowY:"auto", padding:"26px 22px 16px" }}>
+        {/* Date header */}
+        <div style={{ marginBottom:18 }}>
+          <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.5rem", letterSpacing:"-0.01em" }}>今天</div>
+          <div style={{ fontSize:"0.82rem", color:"var(--muted)", marginTop:2 }}>{fmtDateLabel()}</div>
+        </div>
+
+        {/* Status card — hero */}
+        <div className="card">
+          <div className="card-label">現在</div>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <Pip status={nowStatus} size="md" />
+            <div>
+              <div style={{ fontFamily:"var(--font-b)", fontWeight:500, fontSize:"1.4rem", letterSpacing:"-0.01em", color:s.color }}>
+                {s.label}
               </div>
-            )}
+              {nowBlock && nowStatus !== "offline" && (
+                <div style={{ fontSize:"0.75rem", color:"var(--muted)", marginTop:2 }}>
+                  到 {fmt(nowBlock.end)} 為止
+                  {currentEv && ` · ${currentEv.title}`}
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Mini timeline */}
-      <div className="card" style={{ padding:"14px 18px" }}>
-        <TimelineBar blocks={blocks} />
-      </div>
-
-      {/* Next event hint */}
-      {nextEv && (
-        <div className="card" style={{ padding:"12px 18px" }}>
-          <div className="card-label" style={{ marginBottom:6 }}>接下來</div>
-          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <Pip status={nextEv.status} size="sm" />
-            <span style={{ fontSize:"0.9rem", fontWeight:500 }}>{nextEv.title}</span>
-            <span style={{ fontSize:"0.76rem", color:"var(--muted)", marginLeft:"auto" }}>
-              {fmtTime(nextEv.startTime)}
-            </span>
-          </div>
+        {/* Mini timeline */}
+        <div className="card" style={{ padding:"14px 18px" }}>
+          <TimelineBar blocks={blocks} />
         </div>
-      )}
 
-      {/* Action buttons */}
-      <div className="btn-row">
-        <button className="btn btn-p" onClick={() => setTab("行程")}>
+        {/* Next event hint */}
+        {nextEv && (
+          <div className="card" style={{ padding:"12px 18px" }}>
+            <div className="card-label" style={{ marginBottom:6 }}>接下來</div>
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <Pip status={nextEv.status} size="sm" />
+              <span style={{ fontSize:"0.9rem", fontWeight:500 }}>{nextEv.title}</span>
+              <span style={{ fontSize:"0.76rem", color:"var(--muted)", marginLeft:"auto" }}>
+                {fmtTime(nextEv.startTime)}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Pinned bottom action bar */}
+      <div style={{
+        flexShrink:0, padding:"12px 22px 16px",
+        borderTop:"1px solid var(--border)",
+        background:"var(--bg)",
+        display:"flex", gap:10,
+      }}>
+        <button className="btn btn-p" style={{ flex:1 }} onClick={() => setTab("行程")}>
           📋 管理行程
         </button>
-        <button className="btn btn-g" onClick={() => setShareOpen(true)}>
+        <button className="btn btn-g" style={{ flex:1 }} onClick={() => setShareOpen(true)}>
           ↗ 分享
         </button>
       </div>
@@ -1237,12 +1295,13 @@ function DayView({ events, setEvents, onEdit, rangeStart = 8, rangeEnd = 22 }) {
 // ─── Page: Events ──────────────────────────────────────────────────
 function EventsPage({ events, setEvents, displayRange, toast }) {
   const [modal, setModal]         = useState(null);
-  const [view, setView]           = useState("day");
+  const [view, setView]           = useState("day");   // "day" | "week" | "month"
   const [viewDate, setViewDate]   = useState(dateStr());
-  const [shareOpen, setShareOpen] = useState(null); // null | "today" | "week"
+  const [shareOpen, setShareOpen] = useState(null);
 
   const dayEvents  = events.filter(ev => !ev.date || ev.date === viewDate);
   const weekEvents = buildWeekEvents(events);
+  const todayStr   = dateStr();
 
   const handleSave = (ev) => {
     const saved = { ...ev, date: ev.date || viewDate };
@@ -1255,79 +1314,161 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
     setModal(null);
   };
 
-  const handleDelete = (id) => {
-    setEvents(prev => prev.filter(e => e.id !== id));
-    toast("已刪除");
-  };
+  const handleDelete = (id) => { setEvents(prev => prev.filter(e => e.id !== id)); toast("已刪除"); };
 
   const handleWeekCellClick = (weekDayIdx) => {
     const today = new Date();
     const monOffset = -((today.getDay() + 6) % 7);
     const d = new Date(today); d.setDate(today.getDate() + monOffset + weekDayIdx);
-    setViewDate(dateStr(d));
-    setView("day");
+    setViewDate(dateStr(d)); setView("day");
   };
 
-  const shiftDay = (n) => {
-    const d = new Date(viewDate); d.setDate(d.getDate() + n); setViewDate(dateStr(d));
+  const shiftDay = (n) => { const d = new Date(viewDate); d.setDate(d.getDate() + n); setViewDate(dateStr(d)); };
+  const shiftWeek = (n) => {
+    const today = new Date();
+    const monOffset = -((today.getDay() + 6) % 7);
+    const mon = new Date(today); mon.setDate(today.getDate() + monOffset + n * 7);
+    setViewDate(dateStr(mon));
   };
-  const isToday = viewDate === dateStr();
-  const viewDateLabel = new Date(viewDate + "T12:00:00").toLocaleDateString("zh-TW",
-    { month:"long", day:"numeric", weekday:"short" });
+  const shiftMonth = (n) => {
+    const d = new Date(viewDate + "T12:00:00"); d.setMonth(d.getMonth() + n);
+    setViewDate(dateStr(d));
+  };
+
+  const isToday = viewDate === todayStr;
+  const vd = new Date(viewDate + "T12:00:00");
+
+  // Date nav label
+  const dayLabel = vd.toLocaleDateString("zh-TW", { month:"numeric", day:"numeric", weekday:"short" });
+  const weekLabel = (() => {
+    const today = new Date();
+    const monOffset = -((today.getDay() + 6) % 7);
+    const mon = new Date(today); mon.setDate(today.getDate() + monOffset);
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    const f = d => `${d.getMonth()+1}/${d.getDate()}`;
+    return `${f(mon)} – ${f(sun)}`;
+  })();
+  const monthLabel = vd.toLocaleDateString("zh-TW", { year:"numeric", month:"long" });
+
+  const navLabel = view === "day" ? dayLabel : view === "week" ? weekLabel : monthLabel;
+  const onPrev   = view === "day" ? () => shiftDay(-1) : view === "week" ? () => shiftWeek(-1) : () => shiftMonth(-1);
+  const onNext   = view === "day" ? () => shiftDay(1)  : view === "week" ? () => shiftWeek(1)  : () => shiftMonth(1);
+
+  // Month view data
+  const monthCells = (() => {
+    const d = new Date(viewDate + "T12:00:00");
+    const year = d.getFullYear(); const month = d.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const startDow = (firstDay.getDay() + 6) % 7; // Mon=0
+    const daysInMonth = new Date(year, month+1, 0).getDate();
+    const cells = [];
+    for (let i = 0; i < startDow; i++) {
+      const pd = new Date(year, month, -startDow + i + 1);
+      cells.push({ date: dateStr(pd), day: pd.getDate(), otherMonth: true });
+    }
+    for (let d2 = 1; d2 <= daysInMonth; d2++) {
+      const dd = new Date(year, month, d2);
+      cells.push({ date: dateStr(dd), day: d2, otherMonth: false });
+    }
+    while (cells.length % 7 !== 0) {
+      const nd = new Date(year, month+1, cells.length - startDow - daysInMonth + 1);
+      cells.push({ date: dateStr(nd), day: nd.getDate(), otherMonth: true });
+    }
+    return cells;
+  })();
+
+  const shareMode = view === "week" || view === "month" ? "week" : "today";
 
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"calc(100dvh - 64px)", overflow:"hidden" }}>
 
-      {/* Header */}
-      <div style={{ padding:"16px 22px 0", flexShrink:0 }}>
-        <div style={{ marginBottom:12 }}>
-          {view === "day" ? (
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-              <button className="btn-outline" style={{ padding:"5px 14px", fontSize:"1rem" }} onClick={() => shiftDay(-1)}>‹</button>
-              <div style={{ textAlign:"center" }}>
-                <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.15rem" }}>{viewDateLabel}</div>
-                {!isToday && (
-                  <button onClick={() => setViewDate(dateStr())}
-                    style={{ fontSize:"0.7rem", color:"var(--accent)", background:"none", border:"none", cursor:"pointer", padding:0, marginTop:1 }}>
-                    回到今天
-                  </button>
-                )}
-              </div>
-              <button className="btn-outline" style={{ fontSize:"0.75rem", padding:"5px 10px" }} onClick={() => setShareOpen("today")}>↗ 分享</button>
-            </div>
-          ) : (
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-              <div>
-                <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.15rem" }}>本週</div>
-                <div style={{ fontSize:"0.72rem", color:"var(--muted)", marginTop:2 }}>{getWeekHeader()}</div>
-              </div>
-              <button className="btn-outline" style={{ fontSize:"0.75rem", padding:"5px 10px" }} onClick={() => setShareOpen("week")}>↗ 分享</button>
-            </div>
-          )}
+      {/* Toggle + date nav */}
+      <div style={{ padding:"12px 22px 0", flexShrink:0, display:"flex", flexDirection:"column", gap:8 }}>
+        {/* Segmented control */}
+        <div style={{ display:"flex", justifyContent:"center" }}>
+          <div className="view-toggle">
+            {["day","week","month"].map((v,_) => {
+              const labels = { day:"日", week:"週", month:"月" };
+              return (
+                <button key={v} className={`view-toggle-btn ${view===v?"on":""}`} onClick={() => setView(v)}>
+                  {labels[v]}
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <div className="view-toggle" style={{ marginBottom:10 }}>
-          <button className={`view-toggle-btn ${view==="day"?"on":""}`} onClick={() => setView("day")}>日</button>
-          <button className={`view-toggle-btn ${view==="week"?"on":""}`} onClick={() => setView("week")}>週</button>
+
+        {/* Date nav row */}
+        <div className="date-nav-row">
+          <button className="date-nav-btn" onClick={onPrev}>‹</button>
+          <div className="date-nav-label">{navLabel}</div>
+          <button className="date-nav-btn" onClick={onNext}>›</button>
+          {!isToday && view === "day" && (
+            <button onClick={() => setViewDate(todayStr)}
+              style={{ fontSize:"0.7rem", color:"var(--accent)", background:"none", border:"none", cursor:"pointer", padding:"2px 6px" }}>
+              今天
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Body — full remaining height */}
+      {/* Body */}
       <div style={{ flex:1, minHeight:0, display:"flex", flexDirection:"column" }}>
+
+        {/* Day view */}
         {view === "day" && (
           <div style={{ flex:1, minHeight:0, display:"flex", flexDirection:"column", padding:"0 12px 4px" }}>
             <DayView events={dayEvents} setEvents={setEvents} onEdit={ev => setModal(ev)}
               rangeStart={displayRange.start} rangeEnd={displayRange.end} />
           </div>
         )}
+
+        {/* Week view */}
         {view === "week" && (
           <div style={{ flex:1, minHeight:0, overflowY:"auto", padding:"8px 22px 16px" }}>
             <WeekGrid weekEvents={weekEvents} rangeStart={displayRange.start} rangeEnd={displayRange.end}
               onDayClick={handleWeekCellClick} />
           </div>
         )}
+
+        {/* Month view */}
+        {view === "month" && (
+          <div style={{ flex:1, minHeight:0, overflowY:"auto", padding:"8px 16px 16px" }}>
+            <div className="mv-grid">
+              {["一","二","三","四","五","六","日"].map(d => (
+                <div key={d} className="mv-day-hdr">週{d}</div>
+              ))}
+              {monthCells.map((cell, i) => {
+                const cellEvents = events.filter(ev => ev.date === cell.date);
+                const dots = cellEvents.slice(0,3);
+                const isSelected = cell.date === viewDate;
+                return (
+                  <div key={i}
+                    className={`mv-cell ${cell.date === todayStr ? "today" : ""} ${cell.otherMonth ? "other-month" : ""} ${isSelected && !cell.otherMonth ? "mv-selected" : ""}`}
+                    onClick={() => { if (!cell.otherMonth) { setViewDate(cell.date); setView("day"); } }}>
+                    <div className="mv-date">{cell.day}</div>
+                    {dots.length > 0 && (
+                      <div className="mv-dots">
+                        {dots.map((ev,j) => (
+                          <div key={j} className="mv-dot" style={{ background: STATUS[ev.status]?.color || "var(--muted2)" }} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* FAB — always bottom-right, both views */}
+      {/* Share button — top right of header */}
+      <div style={{ position:"absolute", top:12, right:22, zIndex:10 }}>
+        <button className="btn-outline" style={{ fontSize:"0.75rem", padding:"5px 10px" }}
+          onClick={() => setShareOpen(shareMode)}>↗ 分享</button>
+      </div>
+
+      {/* FAB */}
       <button className="fab" onClick={() => setModal("add")} title="新增事件">＋</button>
 
       {modal && <EventModal event={modal==="add"?{ date:viewDate }:modal} onSave={handleSave} onClose={() => setModal(null)} />}
@@ -1337,7 +1478,6 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
 }
 
 
-// ─── Calendar sync entry point ─────────────────────────────────────
 // All OAuth / fetch / convert / dedup logic lives in calendarSync.js
 // App.jsx exposes only syncCalendar() — GcalSettings calls this and nothing else.
 //
