@@ -1,0 +1,26 @@
+/* share.css — CanWe */
+
+/* ── Share page ── */
+.sh-head { text-align: center; }
+.sh-title { font-family: var(--font-b); font-weight: 500; font-size: 1.15rem; letter-spacing: 0.02em; line-height: 1.5; }
+.sh-date  { font-size: 0.74rem; color: var(--muted); margin-top: 4px; letter-spacing: 0.06em; }
+.sh-tabs  { display: flex; background: var(--surface2); border-radius: 9px; padding: 3px; gap: 3px; }
+.sh-tab   {
+  flex: 1; padding: 8px; border: none; border-radius: 7px; cursor: pointer;
+  font-family: var(--font-b); font-size: 0.8rem; font-weight: 400;
+  background: none; color: var(--muted); transition: all 0.16s;
+}
+.sh-tab.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(58,52,46,0.08); }
+
+/* ── Share bottom sheet ── */
+.sh-sheet-backdrop { position: fixed; inset: 0; background: rgba(58,52,46,0.22); backdrop-filter: blur(3px); z-index: 150; animation: bdin 0.2s ease both; }
+@keyframes bdin { from { opacity:0 } to { opacity:1 } }
+.sh-sheet { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-radius: 20px 20px 0 0; padding: 20px 22px 44px; display: flex; flex-direction: column; gap: 16px; z-index: 151; animation: slideup 0.28s cubic-bezier(0.16,1,0.3,1) both; max-height: 88dvh; overflow-y: auto; }
+@keyframes slideup { from { transform: translateY(100%) } to { transform: none } }
+.sh-sheet-handle { width: 36px; height: 4px; border-radius: 2px; background: var(--border2); margin: 0 auto -4px; }
+.sh-sheet-title { font-family: var(--font-d); font-style: italic; font-size: 1.15rem; }
+.sh-preview { background: var(--surface2); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.sh-preview-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.sh-preview-row:last-child { border-bottom: none; }
+.sh-preview-time { font-size: 0.75rem; color: var(--muted); min-width: 100px; font-variant-numeric: tabular-nums; }
+.sh-preview-lbl  { font-size: 0.86rem; font-weight: 500; }

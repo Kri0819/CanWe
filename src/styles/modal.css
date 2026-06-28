@@ -1,0 +1,47 @@
+/* modal.css — CanWe */
+
+/* ── Add/Edit event modal ── */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(58,52,46,0.28);
+  backdrop-filter: blur(4px); z-index: 150;
+  display: flex; align-items: flex-end; justify-content: center;
+  animation: bdin 0.22s ease both;
+}
+@keyframes bdin { from { opacity:0 } to { opacity:1 } }
+.modal {
+  background: var(--surface); border-radius: 18px 18px 0 0;
+  width: 100%; max-width: 100%; padding: 24px 22px 40px; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 18px;
+  animation: slideup 0.28s cubic-bezier(0.16,1,0.3,1) both;
+  max-height: 92dvh; overflow-y: auto;
+}
+@keyframes slideup { from { transform: translateY(100%) } to { transform: none } }
+.modal-title { font-family: var(--font-d); font-style: italic; font-size: 1.2rem; }
+.modal-drag { width: 36px; height: 4px; border-radius: 2px; background: var(--border2); margin: 0 auto -6px; }
+
+/* ── Form elements ── */
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field-label { font-size: 0.72rem; letter-spacing: 0.12em; color: var(--muted); }
+.input {
+  background: var(--surface2); border: 1px solid var(--border2); border-radius: 9px;
+  color: var(--text); font-family: var(--font-b); font-size: 0.9rem; font-weight: 400;
+  padding: 11px 14px; outline: none; width: 100%;
+  transition: border-color 0.15s;
+}
+.input:focus { border-color: var(--accent); }
+.time-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; min-width: 0; }
+.time-row > * { min-width: 0; overflow: hidden; }
+input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-appearance: none; }
+
+/* ── Status picker in modal ── */
+.status-picker { display: flex; flex-direction: column; gap: 7px; }
+.status-option {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px; border-radius: 10px; border: 1px solid var(--border);
+  cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  background: var(--surface2);
+}
+.status-option:hover { border-color: var(--border2); }
+.status-option.selected { border-width: 1.5px; }
+.status-option-label { font-size: 0.88rem; font-weight: 500; flex: 1; }
+.status-option-hint { font-size: 0.72rem; color: var(--muted); }

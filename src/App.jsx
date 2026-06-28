@@ -1,13 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── v0.9.7 ────────────────────────────────────────────────────────
-// DayView 拆分為獨立元件：
-//   DayView.jsx      — 組合元件（scroll、range 計算）
-//   DayTimeline.jsx  — 格線、小時標籤、現在線
-//   DayEvent.jsx     — 事件卡片（顯示 + drag handles）
-//   useDayDrag.js    — Drag / Resize hook（所有互動邏輯）
-// 日/週/月 切換小框框，日期列置中導覽，新增月視圖
-// Google Calendar 完整抽離至 GoogleCalendarService.js + GoogleCalendarImport.jsx
+// ─── v0.9.9 ────────────────────────────────────────────────────────
+// 首頁：修復卡片間距、時間軸下加今日完整行程、移除分隔線、按鈕上移
 // Settings: remove emoji icons, restore clean border rows
 //   components/TimelineBar.jsx  — pure timeline bar display
 //   components/WeekView.jsx     — week grid display + day-click
@@ -20,6 +14,9 @@ import { useState, useEffect, useRef } from "react";
 // WeekView + ShareSheet: read real events grouped by date (no more mock week data)
 
 // ─── Status definitions ────────────────────────────────────────────
+// ─── Status config ─────────────────────────────────────────────────
+// In multi-file project: import { STATUS, STATUS_KEYS, PRIORITY, STATUS_HINTS, guessStatus } from './statusConfig.js'
+// Inline below for single-file build compatibility.
 const STATUS = {
   busy:    { color: "#C98D86", label: "忙碌",      bg: "#C98D8614", barColor: "#C98D86", emoji: "🔴" },
   urgent:  { color: "#D6B183", label: "急事可聯繫", bg: "#D6B18314", barColor: "#D6B183", emoji: "🟠" },
@@ -28,7 +25,8 @@ const STATUS = {
   offline: { color: "#B5AEA7", label: "休息中",    bg: "#B5AEA714", barColor: "#B5AEA7", emoji: "🌙" },
 };
 const STATUS_KEYS = ["busy", "urgent", "reply", "free", "offline"];
-const PRIORITY = { busy: 5, urgent: 4, reply: 3, free: 2, offline: 1 };
+const PRIORITY    = { busy: 5, urgent: 4, reply: 3, free: 2, offline: 1 };
+const STATUS_HINTS = { busy: "", urgent: "", reply: "", free: "", offline: "" };
 
 // ─── Keyword rules (import-time recommendations only) ──────────────
 const DEFAULT_RULES = [
@@ -42,6 +40,8 @@ const DEFAULT_RULES = [
   { id: 8, keyword: "Free",       status: "free"   },
 ];
 
+// guessStatus — extracted to statusConfig.js
+// In multi-file: imported from statusConfig.js
 function guessStatus(title) {
   for (const rule of DEFAULT_RULES) {
     if (title.includes(rule.keyword)) return rule.status;
@@ -1065,13 +1065,12 @@ function HomePage({ events, displayRange, setTab, toast }) {
   const todayEvs = events.filter(ev => !ev.date || ev.date === dateStr());
   const blocks   = buildBlocks(todayEvs);
   const nowHour  = new Date().getHours();
+  const nowMins  = new Date().getMinutes();
   const nowBlock = blocks.find(b => nowHour >= b.start && nowHour < b.end);
   const nowStatus = nowBlock?.status ?? "offline";
   const s = STATUS[nowStatus];
 
-  // Next upcoming event
   const sorted    = [...todayEvs].sort((a,b) => new Date(a.startTime)-new Date(b.startTime));
-  const nextEv    = sorted.find(ev => new Date(ev.startTime).getHours() > nowHour);
   const currentEv = sorted.find(ev => {
     const sh = new Date(ev.startTime).getHours();
     const eh = new Date(ev.endTime).getHours();
@@ -1082,15 +1081,16 @@ function HomePage({ events, displayRange, setTab, toast }) {
     <div style={{ display:"flex", flexDirection:"column", height:"calc(100dvh - 64px)", overflow:"hidden" }}>
 
       {/* Scrollable content */}
-      <div style={{ flex:1, overflowY:"auto", padding:"26px 22px 16px" }}>
+      <div style={{ flex:1, overflowY:"auto", padding:"28px 22px 8px" }}>
+
         {/* Date header */}
-        <div style={{ marginBottom:18 }}>
+        <div style={{ marginBottom:22 }}>
           <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.5rem", letterSpacing:"-0.01em" }}>今天</div>
           <div style={{ fontSize:"0.82rem", color:"var(--muted)", marginTop:2 }}>{fmtDateLabel()}</div>
         </div>
 
-        {/* Status card — hero */}
-        <div className="card">
+        {/* Status card */}
+        <div className="card" style={{ marginBottom:14 }}>
           <div className="card-label">現在</div>
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
             <Pip status={nowStatus} size="md" />
@@ -1100,8 +1100,7 @@ function HomePage({ events, displayRange, setTab, toast }) {
               </div>
               {nowBlock && nowStatus !== "offline" && (
                 <div style={{ fontSize:"0.75rem", color:"var(--muted)", marginTop:2 }}>
-                  到 {fmt(nowBlock.end)} 為止
-                  {currentEv && ` · ${currentEv.title}`}
+                  到 {fmt(nowBlock.end)} 為止{currentEv && ` · ${currentEv.title}`}
                 </div>
               )}
             </div>
@@ -1109,29 +1108,44 @@ function HomePage({ events, displayRange, setTab, toast }) {
         </div>
 
         {/* Mini timeline */}
-        <div className="card" style={{ padding:"14px 18px" }}>
+        <div className="card" style={{ padding:"14px 18px", marginBottom:14 }}>
           <TimelineBar blocks={blocks} />
         </div>
 
-        {/* Next event hint */}
-        {nextEv && (
-          <div className="card" style={{ padding:"12px 18px" }}>
-            <div className="card-label" style={{ marginBottom:6 }}>接下來</div>
-            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-              <Pip status={nextEv.status} size="sm" />
-              <span style={{ fontSize:"0.9rem", fontWeight:500 }}>{nextEv.title}</span>
-              <span style={{ fontSize:"0.76rem", color:"var(--muted)", marginLeft:"auto" }}>
-                {fmtTime(nextEv.startTime)}
-              </span>
+        {/* Today full schedule */}
+        {sorted.length > 0 && (
+          <div className="card" style={{ marginBottom:14 }}>
+            <div className="card-label" style={{ marginBottom:10 }}>今日行程</div>
+            <div style={{ display:"flex", flexDirection:"column" }}>
+              {sorted.map((ev, i) => {
+                const es = STATUS[ev.status];
+                const isPast = new Date(ev.endTime) < new Date();
+                return (
+                  <div key={ev.id} style={{
+                    display:"flex", alignItems:"center", gap:12,
+                    padding:"9px 0",
+                    borderBottom: i < sorted.length-1 ? "1px solid var(--border)" : "none",
+                    opacity: isPast ? 0.45 : 1,
+                  }}>
+                    <Pip status={ev.status} size="sm" />
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:"0.88rem", fontWeight:500, color:"var(--text)" }}>{ev.title}</div>
+                      <div style={{ fontSize:"0.72rem", color:"var(--muted)", marginTop:1, fontVariantNumeric:"tabular-nums" }}>
+                        {fmtTime(ev.startTime)} – {fmtTime(ev.endTime)}
+                      </div>
+                    </div>
+                    <div style={{ fontSize:"0.72rem", color:es.color, fontWeight:500 }}>{es.label}</div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
       </div>
 
-      {/* Pinned bottom action bar */}
+      {/* Pinned bottom action bar — no border, lifted from edge */}
       <div style={{
-        flexShrink:0, padding:"12px 22px 16px",
-        borderTop:"1px solid var(--border)",
+        flexShrink:0, padding:"10px 22px 20px",
         background:"var(--bg)",
         display:"flex", gap:10,
       }}>
