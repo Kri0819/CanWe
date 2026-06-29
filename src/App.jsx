@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── v0.9.10 ───────────────────────────────────────────────────────
-// 週視圖：點擊展開當日狀態，不跳轉日視圖
-// 月視圖：點擊顯示當日狀態於月曆下方，不跳轉
+// ─── v0.9.11 ───────────────────────────────────────────────────────
+// 設定：新增週起始日（週一～週日），週視圖跟著調整
 // Settings: remove emoji icons, restore clean border rows
 //   components/TimelineBar.jsx  — pure timeline bar display
 //   components/WeekView.jsx     — week grid display + day-click
@@ -132,16 +131,26 @@ function getWeekHeader() {
   return `${year} 年 第 ${weekNum} 週｜${range}`;
 }
 
-const WEEK_DAYS = ["一","二","三","四","五","六","日"];
-// Build array of 7 event-arrays for Mon–Sun of current week from real events
-// Events are matched by date field (YYYY-MM-DD)
-function buildWeekEvents(events) {
+const WEEK_DAYS_BASE = ["一","二","三","四","五","六","日"];
+// Returns 7-element array starting from weekStart (0=Mon..6=Sun)
+function getWeekDays(weekStart = 0) {
+  return Array.from({length:7}, (_,i) => WEEK_DAYS_BASE[(weekStart + i) % 7]);
+}
+// Keep WEEK_DAYS for backwards compat (default Mon-start)
+const WEEK_DAYS = WEEK_DAYS_BASE;
+// Build array of 7 event-arrays for the current week from real events.
+// weekStart: 0=Mon, 1=Tue, ..., 6=Sun (matches WEEK_DAYS index)
+function buildWeekEvents(events, weekStart = 0) {
   const today = new Date();
-  const dow   = today.getDay(); // 0=Sun
-  const monOffset = -((dow + 6) % 7); // days from today to Monday
+  // dow: 0=Mon..6=Sun
+  const dow = (today.getDay() + 6) % 7;
+  // How many days back to reach the weekStart day
+  let offset = dow - weekStart;
+  if (offset < 0) offset += 7;
+  const startOffset = -offset;
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(today);
-    d.setDate(today.getDate() + monOffset + i);
+    d.setDate(today.getDate() + startOffset + i);
     const ds = dateStr(d);
     return events.filter(ev => ev.date === ds);
   });
@@ -773,12 +782,16 @@ function getWeekRecommendations(weekEvents, rangeStart, rangeEnd) {
   return { best, good, ok, busy };
 }
 
-// ─── WeekView — horizontal bar summary ────────────────────────────
-function WeekGrid({ weekEvents, rangeStart = 8, rangeEnd = 22, onDayClick }) {
-  const todayIdx = (new Date().getDay() + 6) % 7;
+function WeekGrid({ weekEvents, rangeStart = 8, rangeEnd = 22, onDayClick, weekStart = 0 }) {
+  const today = new Date();
+  const todayDow = (today.getDay() + 6) % 7; // 0=Mon
+  // Which column index is today?
+  let todayIdx = todayDow - weekStart;
+  if (todayIdx < 0) todayIdx += 7;
+  const weekDays = getWeekDays(weekStart);
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-      {WEEK_DAYS.map((day, di) => {
+      {weekDays.map((day, di) => {
         const sum     = getDaySummary(weekEvents[di] || [], rangeStart, rangeEnd);
         const isToday = di === todayIdx;
         const span    = rangeEnd - rangeStart;
@@ -1317,7 +1330,7 @@ function DayView({ events, setEvents, onEdit, rangeStart = 8, rangeEnd = 22 }) {
 }
 
 // ─── Page: Events ──────────────────────────────────────────────────
-function EventsPage({ events, setEvents, displayRange, toast }) {
+function EventsPage({ events, setEvents, displayRange, weekStart = 0, toast }) {
   const [modal, setModal]         = useState(null);
   const [view, setView]           = useState("day");
   const [viewDate, setViewDate]   = useState(dateStr());
@@ -1325,7 +1338,7 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
   const [expandedDay, setExpandedDay] = useState(null); // date string for expanded day in week/month
 
   const dayEvents  = events.filter(ev => !ev.date || ev.date === viewDate);
-  const weekEvents = buildWeekEvents(events);
+  const weekEvents = buildWeekEvents(events, weekStart);
   const todayStr   = dateStr();
 
   const handleSave = (ev) => {
@@ -1488,7 +1501,7 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
         {view === "week" && (
           <div style={{ flex:1, minHeight:0, overflowY:"auto", padding:"8px 22px 16px" }}>
             <WeekGrid weekEvents={weekEvents} rangeStart={displayRange.start} rangeEnd={displayRange.end}
-              onDayClick={handleWeekCellClick} />
+              onDayClick={handleWeekCellClick} weekStart={weekStart} />
             {expandedDay && <DayDetail date={expandedDay} />}
           </div>
         )}
@@ -2043,12 +2056,51 @@ function RecurringSettings({ recurring, setRecurring, onBack, toast }) {
   );
 }
 
-function SettingsPage({ rules, setRules, events, setEvents, displayRange, setDisplayRange, recurring, setRecurring, toast }) {
+// Sub-page: 週起始日
+function WeekStartSettings({ weekStart, setWeekStart, onBack, toast }) {
+  const DAY_OPTIONS = [
+    { value: 0, label: "週一" },
+    { value: 1, label: "週二" },
+    { value: 2, label: "週三" },
+    { value: 3, label: "週四" },
+    { value: 4, label: "週五" },
+    { value: 5, label: "週六" },
+    { value: 6, label: "週日" },
+  ];
+  return (
+    <div className="page" style={{ paddingTop:20 }}>
+      <SettingsBack onBack={onBack} title="週起始日" />
+      <div className="card">
+        <div style={{ fontSize:"0.75rem", color:"var(--muted)", marginBottom:14, lineHeight:1.6 }}>
+          設定週視圖從哪天開始排列。
+        </div>
+        {DAY_OPTIONS.map(opt => (
+          <div key={opt.value}
+            onClick={() => { setWeekStart(opt.value); toast(`週起始日已設為 ${opt.label} ✓`); }}
+            style={{
+              display:"flex", alignItems:"center", justifyContent:"space-between",
+              padding:"13px 0", borderBottom:"1px solid var(--border)", cursor:"pointer",
+            }}>
+            <span style={{ fontSize:"0.9rem", fontWeight: weekStart === opt.value ? 500 : 400 }}>
+              {opt.label}
+            </span>
+            {weekStart === opt.value && (
+              <span style={{ color:"var(--accent)", fontSize:"1rem" }}>✓</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SettingsPage({ rules, setRules, events, setEvents, displayRange, setDisplayRange, recurring, setRecurring, weekStart, setWeekStart, toast }) {
   const [sub, setSub] = useState(null);
 
   if (sub === "status")    return <StatusSettings    onBack={() => setSub(null)} toast={toast} />;
   if (sub === "keywords")  return <KeywordSettings   rules={rules} setRules={setRules} onBack={() => setSub(null)} toast={toast} />;
   if (sub === "timerange") return <TimeRangeSettings displayRange={displayRange} setDisplayRange={setDisplayRange} onBack={() => setSub(null)} toast={toast} />;
+  if (sub === "weekstart") return <WeekStartSettings weekStart={weekStart} setWeekStart={setWeekStart} onBack={() => setSub(null)} toast={toast} />;
   if (sub === "gcal")      return <GcalSettings      events={events} setEvents={setEvents} onBack={() => setSub(null)} toast={toast} />;
   if (sub === "recurring") return <RecurringSettings recurring={recurring} setRecurring={setRecurring} onBack={() => setSub(null)} toast={toast} />;
 
@@ -2057,7 +2109,8 @@ function SettingsPage({ rules, setRules, events, setEvents, displayRange, setDis
     { key:"recurring", title:"固定排程",             desc:`${recurring.length} 個固定排程` },
     { key:"status",    title:"狀態管理",             desc:"自訂狀態名稱與說明文字" },
     { key:"keywords",  title:"關鍵字規則",           desc:"匯入時自動推薦狀態" },
-    { key:"timerange", title:"顯示時間範圍",         desc:`目前 ${String(displayRange.start).padStart(2,"0")}:00 – ${String(displayRange.end).padStart(2,"0")}:00` },
+    { key:"weekstart",  title:"週起始日",             desc:`目前：週${["一","二","三","四","五","六","日"][weekStart]}` },
+    { key:"timerange",  title:"顯示時間範圍",         desc:`目前 ${String(displayRange.start).padStart(2,"0")}:00 – ${String(displayRange.end).padStart(2,"0")}:00` },
   ];
 
   return (
@@ -2109,6 +2162,7 @@ export default function CanWe() {
   const [events, setEvents]         = useState(SEED_EVENTS);
   const [rules, setRules]           = useState(DEFAULT_RULES);
   const [recurring, setRecurring]   = useState(DEFAULT_RECURRING);
+  const [weekStart, setWeekStart]   = useState(0); // 0=Mon..6=Sun
   const [displayRange, setDisplayRange] = useState({ start: 8, end: 22 }); // default 08–22
   const [toastMsg, setToastMsg]     = useState("");
   const [toastOn, setToastOn]       = useState(false);
@@ -2161,8 +2215,8 @@ export default function CanWe() {
 
       <div className="app">
         {tab==="首頁" && <HomePage events={events} displayRange={displayRange} setTab={setTab} toast={toast} />}
-        {tab==="行程" && <EventsPage events={events} setEvents={setEvents} displayRange={displayRange} toast={toast} />}
-        {tab==="設定" && <SettingsPage rules={rules} setRules={setRules} events={events} setEvents={setEvents} displayRange={displayRange} setDisplayRange={setDisplayRange} recurring={recurring} setRecurring={setRecurring} toast={toast} />}
+        {tab==="行程" && <EventsPage events={events} setEvents={setEvents} displayRange={displayRange} weekStart={weekStart} toast={toast} />}
+        {tab==="設定" && <SettingsPage rules={rules} setRules={setRules} events={events} setEvents={setEvents} displayRange={displayRange} setDisplayRange={setDisplayRange} recurring={recurring} setRecurring={setRecurring} weekStart={weekStart} setWeekStart={setWeekStart} toast={toast} />}
       </div>
 
       <nav className="bnav">
