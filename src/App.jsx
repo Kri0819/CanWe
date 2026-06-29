@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── v0.9.9 ────────────────────────────────────────────────────────
-// 首頁：修復卡片間距、時間軸下加今日完整行程、移除分隔線、按鈕上移
+// ─── v0.9.10 ───────────────────────────────────────────────────────
+// 週視圖：點擊展開當日狀態，不跳轉日視圖
+// 月視圖：點擊顯示當日狀態於月曆下方，不跳轉
 // Settings: remove emoji icons, restore clean border rows
 //   components/TimelineBar.jsx  — pure timeline bar display
 //   components/WeekView.jsx     — week grid display + day-click
@@ -1318,9 +1319,10 @@ function DayView({ events, setEvents, onEdit, rangeStart = 8, rangeEnd = 22 }) {
 // ─── Page: Events ──────────────────────────────────────────────────
 function EventsPage({ events, setEvents, displayRange, toast }) {
   const [modal, setModal]         = useState(null);
-  const [view, setView]           = useState("day");   // "day" | "week" | "month"
+  const [view, setView]           = useState("day");
   const [viewDate, setViewDate]   = useState(dateStr());
   const [shareOpen, setShareOpen] = useState(null);
+  const [expandedDay, setExpandedDay] = useState(null); // date string for expanded day in week/month
 
   const dayEvents  = events.filter(ev => !ev.date || ev.date === viewDate);
   const weekEvents = buildWeekEvents(events);
@@ -1339,11 +1341,20 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
 
   const handleDelete = (id) => { setEvents(prev => prev.filter(e => e.id !== id)); toast("已刪除"); };
 
+  // Week: toggle expand, no navigation
   const handleWeekCellClick = (weekDayIdx) => {
     const today = new Date();
     const monOffset = -((today.getDay() + 6) % 7);
     const d = new Date(today); d.setDate(today.getDate() + monOffset + weekDayIdx);
-    setViewDate(dateStr(d)); setView("day");
+    const ds = dateStr(d);
+    setExpandedDay(prev => prev === ds ? null : ds);
+  };
+
+  // Month: toggle expand, no navigation
+  const handleMonthCellClick = (cell) => {
+    if (cell.otherMonth) return;
+    setExpandedDay(prev => prev === cell.date ? null : cell.date);
+    setViewDate(cell.date);
   };
 
   const shiftDay = (n) => { const d = new Date(viewDate); d.setDate(d.getDate() + n); setViewDate(dateStr(d)); };
@@ -1352,16 +1363,17 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
     const monOffset = -((today.getDay() + 6) % 7);
     const mon = new Date(today); mon.setDate(today.getDate() + monOffset + n * 7);
     setViewDate(dateStr(mon));
+    setExpandedDay(null);
   };
   const shiftMonth = (n) => {
     const d = new Date(viewDate + "T12:00:00"); d.setMonth(d.getMonth() + n);
     setViewDate(dateStr(d));
+    setExpandedDay(null);
   };
 
   const isToday = viewDate === todayStr;
   const vd = new Date(viewDate + "T12:00:00");
 
-  // Date nav label
   const dayLabel = vd.toLocaleDateString("zh-TW", { month:"numeric", day:"numeric", weekday:"short" });
   const weekLabel = (() => {
     const today = new Date();
@@ -1377,12 +1389,12 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
   const onPrev   = view === "day" ? () => shiftDay(-1) : view === "week" ? () => shiftWeek(-1) : () => shiftMonth(-1);
   const onNext   = view === "day" ? () => shiftDay(1)  : view === "week" ? () => shiftWeek(1)  : () => shiftMonth(1);
 
-  // Month view data
+  // Month view cells
   const monthCells = (() => {
     const d = new Date(viewDate + "T12:00:00");
     const year = d.getFullYear(); const month = d.getMonth();
     const firstDay = new Date(year, month, 1);
-    const startDow = (firstDay.getDay() + 6) % 7; // Mon=0
+    const startDow = (firstDay.getDay() + 6) % 7;
     const daysInMonth = new Date(year, month+1, 0).getDate();
     const cells = [];
     for (let i = 0; i < startDow; i++) {
@@ -1400,6 +1412,37 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
     return cells;
   })();
 
+  // Day detail panel — shown in week/month when a day is expanded
+  const DayDetail = ({ date }) => {
+    const evs = events.filter(ev => ev.date === date).sort((a,b) => new Date(a.startTime)-new Date(b.startTime));
+    const blocks = buildBlocks(evs);
+    const visibleBlocks = blocks.filter(b => b.status !== "offline" && b.end > displayRange.start && b.start < displayRange.end);
+    const dl = new Date(date + "T12:00:00").toLocaleDateString("zh-TW", { month:"numeric", day:"numeric", weekday:"short" });
+    return (
+      <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 16px", marginTop:8 }}>
+        <div style={{ fontSize:"0.75rem", color:"var(--muted)", marginBottom:10, fontWeight:500 }}>{dl}</div>
+        {visibleBlocks.length === 0 ? (
+          <div style={{ fontSize:"0.8rem", color:"var(--muted2)" }}>無行程</div>
+        ) : (
+          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+            {visibleBlocks.map((b, i) => {
+              const s = STATUS[b.status];
+              return (
+                <div key={i} style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <Pip status={b.status} size="sm" />
+                  <span style={{ fontSize:"0.78rem", color:"var(--muted)", fontVariantNumeric:"tabular-nums", minWidth:90 }}>
+                    {fmt(b.start)}:00 – {fmt(b.end)}:00
+                  </span>
+                  <span style={{ fontSize:"0.82rem", fontWeight:500, color:s.color }}>{s.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const shareMode = view === "week" || view === "month" ? "week" : "today";
 
   return (
@@ -1407,21 +1450,16 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
 
       {/* Toggle + date nav */}
       <div style={{ padding:"12px 22px 0", flexShrink:0, display:"flex", flexDirection:"column", gap:8 }}>
-        {/* Segmented control */}
         <div style={{ display:"flex", justifyContent:"center" }}>
           <div className="view-toggle">
-            {["day","week","month"].map((v,_) => {
-              const labels = { day:"日", week:"週", month:"月" };
-              return (
-                <button key={v} className={`view-toggle-btn ${view===v?"on":""}`} onClick={() => setView(v)}>
-                  {labels[v]}
-                </button>
-              );
-            })}
+            {["day","week","month"].map((v) => (
+              <button key={v} className={`view-toggle-btn ${view===v?"on":""}`}
+                onClick={() => { setView(v); setExpandedDay(null); }}>
+                {{"day":"日","week":"週","month":"月"}[v]}
+              </button>
+            ))}
           </div>
         </div>
-
-        {/* Date nav row */}
         <div className="date-nav-row">
           <button className="date-nav-btn" onClick={onPrev}>‹</button>
           <div className="date-nav-label">{navLabel}</div>
@@ -1446,15 +1484,16 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
           </div>
         )}
 
-        {/* Week view */}
+        {/* Week view — click expands inline, no navigation */}
         {view === "week" && (
           <div style={{ flex:1, minHeight:0, overflowY:"auto", padding:"8px 22px 16px" }}>
             <WeekGrid weekEvents={weekEvents} rangeStart={displayRange.start} rangeEnd={displayRange.end}
               onDayClick={handleWeekCellClick} />
+            {expandedDay && <DayDetail date={expandedDay} />}
           </div>
         )}
 
-        {/* Month view */}
+        {/* Month view — click shows detail below calendar */}
         {view === "month" && (
           <div style={{ flex:1, minHeight:0, overflowY:"auto", padding:"8px 16px 16px" }}>
             <div className="mv-grid">
@@ -1464,11 +1503,11 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
               {monthCells.map((cell, i) => {
                 const cellEvents = events.filter(ev => ev.date === cell.date);
                 const dots = cellEvents.slice(0,3);
-                const isSelected = cell.date === viewDate;
+                const isExpanded = cell.date === expandedDay;
                 return (
                   <div key={i}
-                    className={`mv-cell ${cell.date === todayStr ? "today" : ""} ${cell.otherMonth ? "other-month" : ""} ${isSelected && !cell.otherMonth ? "mv-selected" : ""}`}
-                    onClick={() => { if (!cell.otherMonth) { setViewDate(cell.date); setView("day"); } }}>
+                    className={`mv-cell ${cell.date === todayStr ? "today" : ""} ${cell.otherMonth ? "other-month" : ""} ${isExpanded ? "mv-selected" : ""}`}
+                    onClick={() => handleMonthCellClick(cell)}>
                     <div className="mv-date">{cell.day}</div>
                     {dots.length > 0 && (
                       <div className="mv-dots">
@@ -1481,17 +1520,18 @@ function EventsPage({ events, setEvents, displayRange, toast }) {
                 );
               })}
             </div>
+            {/* Day detail below calendar */}
+            {expandedDay && <DayDetail date={expandedDay} />}
           </div>
         )}
       </div>
 
-      {/* Share button — top right of header */}
+      {/* Share button */}
       <div style={{ position:"absolute", top:12, right:22, zIndex:10 }}>
         <button className="btn-outline" style={{ fontSize:"0.75rem", padding:"5px 10px" }}
           onClick={() => setShareOpen(shareMode)}>↗ 分享</button>
       </div>
 
-      {/* FAB */}
       <button className="fab" onClick={() => setModal("add")} title="新增事件">＋</button>
 
       {modal && <EventModal event={modal==="add"?{ date:viewDate }:modal} onSave={handleSave} onClose={() => setModal(null)} />}
