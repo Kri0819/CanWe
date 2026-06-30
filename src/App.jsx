@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── v0.9.11 ───────────────────────────────────────────────────────
-// 設定：新增週起始日（週一～週日），週視圖跟著調整
+// ─── v0.9.12 ───────────────────────────────────────────────────────
+// 週視圖展開：移至列內、無框、字體放大、時間縮排、箭頭改▾/▴
 // Settings: remove emoji icons, restore clean border rows
 //   components/TimelineBar.jsx  — pure timeline bar display
 //   components/WeekView.jsx     — week grid display + day-click
@@ -782,53 +782,94 @@ function getWeekRecommendations(weekEvents, rangeStart, rangeEnd) {
   return { best, good, ok, busy };
 }
 
-function WeekGrid({ weekEvents, rangeStart = 8, rangeEnd = 22, onDayClick, weekStart = 0 }) {
+function WeekGrid({ weekEvents, rangeStart = 8, rangeEnd = 22, onDayClick, weekStart = 0, expandedDay = null, getExpandDate }) {
   const today = new Date();
-  const todayDow = (today.getDay() + 6) % 7; // 0=Mon
-  // Which column index is today?
+  const todayDow = (today.getDay() + 6) % 7;
   let todayIdx = todayDow - weekStart;
   if (todayIdx < 0) todayIdx += 7;
   const weekDays = getWeekDays(weekStart);
+
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
       {weekDays.map((day, di) => {
         const sum     = getDaySummary(weekEvents[di] || [], rangeStart, rangeEnd);
         const isToday = di === todayIdx;
         const span    = rangeEnd - rangeStart;
+        const colDate = getExpandDate ? getExpandDate(di) : null;
+        const isExpanded = colDate && colDate === expandedDay;
+
         return (
-          <div key={di} onClick={() => onDayClick && onDayClick(di)}
-            style={{
-              display:"flex", alignItems:"center", gap:12, padding:"10px 14px",
-              borderRadius:10, cursor: onDayClick ? "pointer" : "default",
-              border:`1px solid ${isToday ? "var(--accent)" : "var(--border)"}`,
-              background: isToday ? "rgba(124,111,98,0.06)" : "var(--surface)",
-              transition:"border-color 0.15s",
-            }}>
-            <div style={{ width:28, flexShrink:0,
-              fontFamily:"var(--font-b)", fontSize:"0.78rem",
-              fontWeight: isToday ? 600 : 400,
-              color: isToday ? "var(--accent)" : "var(--text)" }}>
-              週{day}
+          <div key={di}>
+            <div onClick={() => onDayClick && onDayClick(di)}
+              style={{
+                display:"flex", alignItems:"center", gap:12, padding:"10px 14px",
+                borderRadius: isExpanded ? "10px 10px 0 0" : 10,
+                cursor: onDayClick ? "pointer" : "default",
+                border:`1px solid ${isToday ? "var(--accent)" : "var(--border)"}`,
+                borderBottom: isExpanded ? "none" : undefined,
+                background: isToday ? "rgba(124,111,98,0.06)" : "var(--surface)",
+                transition:"border-color 0.15s",
+              }}>
+              <div style={{ width:28, flexShrink:0,
+                fontFamily:"var(--font-b)", fontSize:"0.82rem",
+                fontWeight: isToday ? 600 : 400,
+                color: isToday ? "var(--accent)" : "var(--text)" }}>
+                週{day}
+              </div>
+              <div style={{ flex:1, height:10, borderRadius:4, overflow:"hidden",
+                background:"var(--surface2)", position:"relative" }}>
+                {sum.blocks.map((b, i) => {
+                  const left  = ((Math.max(b.start, rangeStart) - rangeStart) / span) * 100;
+                  const width = ((Math.min(b.end, rangeEnd) - Math.max(b.start, rangeStart)) / span) * 100;
+                  return (
+                    <div key={i} style={{
+                      position:"absolute", top:0, bottom:0,
+                      left:`${left}%`, width:`${width}%`,
+                      background: STATUS[b.status].barColor,
+                    }} />
+                  );
+                })}
+              </div>
+              <div style={{ fontSize:"0.78rem", color:"var(--muted)", minWidth:60,
+                textAlign:"right", fontFamily:"var(--font-b)" }}>
+                {sum.label}
+              </div>
+              {onDayClick && (
+                <span style={{ color:"var(--muted2)", fontSize:"0.82rem", minWidth:14, textAlign:"center" }}>
+                  {isExpanded ? "▴" : "▾"}
+                </span>
+              )}
             </div>
-            <div style={{ flex:1, height:10, borderRadius:4, overflow:"hidden",
-              background:"var(--surface2)", position:"relative" }}>
-              {sum.blocks.map((b, i) => {
-                const left  = ((Math.max(b.start, rangeStart) - rangeStart) / span) * 100;
-                const width = ((Math.min(b.end, rangeEnd) - Math.max(b.start, rangeStart)) / span) * 100;
-                return (
-                  <div key={i} style={{
-                    position:"absolute", top:0, bottom:0,
-                    left:`${left}%`, width:`${width}%`,
-                    background: STATUS[b.status].barColor,
-                  }} />
-                );
-              })}
-            </div>
-            <div style={{ fontSize:"0.72rem", color:"var(--muted)", minWidth:64,
-              textAlign:"right", fontFamily:"var(--font-b)" }}>
-              {sum.label}
-            </div>
-            {onDayClick && <span style={{ color:"var(--muted2)", fontSize:"0.8rem" }}>›</span>}
+
+            {isExpanded && (
+              <div style={{
+                border:`1px solid ${isToday ? "var(--accent)" : "var(--border)"}`,
+                borderTop:"none", borderRadius:"0 0 10px 10px",
+                background: isToday ? "rgba(124,111,98,0.04)" : "var(--surface)",
+                padding:"10px 14px 14px 54px",
+              }}>
+                {sum.blocks.filter(b => b.status !== "offline").length === 0 ? (
+                  <div style={{ fontSize:"0.85rem", color:"var(--muted2)" }}>無行程</div>
+                ) : (
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {sum.blocks.filter(b => b.status !== "offline").map((b, i) => {
+                      const s = STATUS[b.status];
+                      const startH = Math.max(b.start, rangeStart);
+                      const endH   = Math.min(b.end, rangeEnd);
+                      return (
+                        <div key={i} style={{ display:"flex", alignItems:"center", gap:10 }}>
+                          <Pip status={b.status} size="sm" />
+                          <span style={{ fontSize:"0.82rem", color:"var(--muted)", fontVariantNumeric:"tabular-nums", minWidth:100 }}>
+                            {String(startH).padStart(2,"0")}:00–{String(endH).padStart(2,"0")}:00
+                          </span>
+                          <span style={{ fontSize:"0.88rem", fontWeight:500, color:s.color }}>{s.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         );
       })}
@@ -1501,8 +1542,18 @@ function EventsPage({ events, setEvents, displayRange, weekStart = 0, toast }) {
         {view === "week" && (
           <div style={{ flex:1, minHeight:0, overflowY:"auto", padding:"8px 22px 16px" }}>
             <WeekGrid weekEvents={weekEvents} rangeStart={displayRange.start} rangeEnd={displayRange.end}
-              onDayClick={handleWeekCellClick} weekStart={weekStart} />
-            {expandedDay && <DayDetail date={expandedDay} />}
+              onDayClick={handleWeekCellClick} weekStart={weekStart}
+              expandedDay={expandedDay}
+              getExpandDate={(di) => {
+                const today = new Date();
+                const dow = (today.getDay() + 6) % 7;
+                let offset = dow - weekStart;
+                if (offset < 0) offset += 7;
+                const d = new Date(today);
+                d.setDate(today.getDate() - offset + di);
+                return dateStr(d);
+              }}
+            />
           </div>
         )}
 
