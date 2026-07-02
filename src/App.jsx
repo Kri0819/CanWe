@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── v0.9.12 ───────────────────────────────────────────────────────
-// 週視圖展開：移至列內、無框、字體放大、時間縮排、箭頭改▾/▴
+// ─── v0.9.12b ──────────────────────────────────────────────────────
+// 修正：週視圖框線、月視圖點擊、歷史行程、展開加日期標籤
 // Settings: remove emoji icons, restore clean border rows
 //   components/TimelineBar.jsx  — pure timeline bar display
 //   components/WeekView.jsx     — week grid display + day-click
@@ -806,7 +806,7 @@ function WeekGrid({ weekEvents, rangeStart = 8, rangeEnd = 22, onDayClick, weekS
                 borderRadius: isExpanded ? "10px 10px 0 0" : 10,
                 cursor: onDayClick ? "pointer" : "default",
                 border:`1px solid ${isToday ? "var(--accent)" : "var(--border)"}`,
-                borderBottom: isExpanded ? "none" : undefined,
+                ...(isExpanded ? { borderBottom:"none" } : {}),
                 background: isToday ? "rgba(124,111,98,0.06)" : "var(--surface)",
                 transition:"border-color 0.15s",
               }}>
@@ -848,6 +848,12 @@ function WeekGrid({ weekEvents, rangeStart = 8, rangeEnd = 22, onDayClick, weekS
                 background: isToday ? "rgba(124,111,98,0.04)" : "var(--surface)",
                 padding:"10px 14px 14px 54px",
               }}>
+                {/* Date label */}
+                {colDate && (
+                  <div style={{ fontSize:"0.78rem", color:"var(--muted)", marginBottom:8, fontWeight:500 }}>
+                    {new Date(colDate + "T12:00:00").toLocaleDateString("zh-TW", { month:"numeric", day:"numeric", weekday:"short" })}
+                  </div>
+                )}
                 {sum.blocks.filter(b => b.status !== "offline").length === 0 ? (
                   <div style={{ fontSize:"0.85rem", color:"var(--muted2)" }}>無行程</div>
                 ) : (
@@ -1571,7 +1577,7 @@ function EventsPage({ events, setEvents, displayRange, weekStart = 0, toast }) {
                 return (
                   <div key={i}
                     className={`mv-cell ${cell.date === todayStr ? "today" : ""} ${cell.otherMonth ? "other-month" : ""} ${isExpanded ? "mv-selected" : ""}`}
-                    onClick={() => handleMonthCellClick(cell)}>
+                    onClick={() => handleMonthCellClick(cell)} style={{ cursor: cell.otherMonth ? "default" : "pointer" }}>
                     <div className="mv-date">{cell.day}</div>
                     {dots.length > 0 && (
                       <div className="mv-dots">
