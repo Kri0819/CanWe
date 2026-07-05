@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── v0.9.12b ──────────────────────────────────────────────────────
-// 修正：週視圖框線、月視圖點擊、歷史行程、展開加日期標籤
+// ─── v0.9.13 ───────────────────────────────────────────────────────
+// 首頁：管理行程＋分享按鈕固定在底部（position:fixed）
 // Settings: remove emoji icons, restore clean border rows
 //   components/TimelineBar.jsx  — pure timeline bar display
 //   components/WeekView.jsx     — week grid display + day-click
@@ -63,6 +63,8 @@ function dateStr(d = new Date()) { return d.toISOString().slice(0, 10); }
 let _nextId = 10;
 function newId() { return String(++_nextId); }
 
+// SEED_EVENTS: place demo events on today's actual date
+// In production, events are saved with the date the user picks in EventModal
 const SEED_EVENTS = [
   { id: "1", date: dateStr(), title: "個案紀錄", startTime: todayAt(9),  endTime: todayAt(12), note: "", status: "reply" },
   { id: "2", date: dateStr(), title: "午休",     startTime: todayAt(12), endTime: todayAt(13), note: "", status: "free"  },
@@ -805,8 +807,10 @@ function WeekGrid({ weekEvents, rangeStart = 8, rangeEnd = 22, onDayClick, weekS
                 display:"flex", alignItems:"center", gap:12, padding:"10px 14px",
                 borderRadius: isExpanded ? "10px 10px 0 0" : 10,
                 cursor: onDayClick ? "pointer" : "default",
-                border:`1px solid ${isToday ? "var(--accent)" : "var(--border)"}`,
-                ...(isExpanded ? { borderBottom:"none" } : {}),
+                borderTop:`1px solid ${isToday ? "var(--accent)" : "var(--border)"}`,
+                borderLeft:`1px solid ${isToday ? "var(--accent)" : "var(--border)"}`,
+                borderRight:`1px solid ${isToday ? "var(--accent)" : "var(--border)"}`,
+                borderBottom: isExpanded ? "none" : `1px solid ${isToday ? "var(--accent)" : "var(--border)"}`,
                 background: isToday ? "rgba(124,111,98,0.06)" : "var(--surface)",
                 transition:"border-color 0.15s",
               }}>
@@ -1142,7 +1146,7 @@ function HomePage({ events, displayRange, setTab, toast }) {
     <div style={{ display:"flex", flexDirection:"column", height:"calc(100dvh - 64px)", overflow:"hidden" }}>
 
       {/* Scrollable content */}
-      <div style={{ flex:1, overflowY:"auto", padding:"28px 22px 8px" }}>
+      <div style={{ flex:1, overflowY:"auto", padding:"28px 22px 90px" }}>
 
         {/* Date header */}
         <div style={{ marginBottom:22 }}>
@@ -1204,11 +1208,13 @@ function HomePage({ events, displayRange, setTab, toast }) {
         )}
       </div>
 
-      {/* Pinned bottom action bar — no border, lifted from edge */}
+      {/* Fixed bottom action bar */}
       <div style={{
-        flexShrink:0, padding:"10px 22px 20px",
+        position:"fixed", bottom:64, left:0, right:0,
+        padding:"10px 22px 12px",
         background:"var(--bg)",
         display:"flex", gap:10,
+        zIndex:50,
       }}>
         <button className="btn btn-p" style={{ flex:1 }} onClick={() => setTab("行程")}>
           📋 管理行程
