@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── v0.9.13 ───────────────────────────────────────────────────────
-// 首頁：管理行程＋分享按鈕固定在底部（position:fixed）
+// ─── v0.9.13b ──────────────────────────────────────────────────────
+// 首頁：按鈕往上推，不被導覽列壓住
 // Settings: remove emoji icons, restore clean border rows
 //   components/TimelineBar.jsx  — pure timeline bar display
 //   components/WeekView.jsx     — week grid display + day-click
@@ -1210,7 +1210,7 @@ function HomePage({ events, displayRange, setTab, toast }) {
 
       {/* Fixed bottom action bar */}
       <div style={{
-        position:"fixed", bottom:64, left:0, right:0,
+        position:"fixed", bottom:80, left:0, right:0,
         padding:"10px 22px 12px",
         background:"var(--bg)",
         display:"flex", gap:10,
