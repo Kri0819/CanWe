@@ -1,7 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── v0.9.13b ──────────────────────────────────────────────────────
-// 首頁：按鈕往上推，不被導覽列壓住
+// ─── v0.9.14 ───────────────────────────────────────────────────────
+// 修正五項：
+// 1. 「回到今天」移到日期下方，間距調整
+// 2. 週視圖可正確換週（buildWeekEvents/weekLabel/handleWeekCellClick 改用 viewDate 而非固定 today）
+// 3. 分享會跟著切換的日期/週次更新（ShareSheet 新增 refDate prop）
+// 4. EventModal 改為置中卡片彈窗，狀態改為下拉選單
+// 5. SEED_EVENTS 分散到整週（今天前後各兩天），週/月視圖不再只顯示今天
 // Settings: remove emoji icons, restore clean border rows
 //   components/TimelineBar.jsx  — pure timeline bar display
 //   components/WeekView.jsx     — week grid display + day-click
@@ -63,13 +68,38 @@ function dateStr(d = new Date()) { return d.toISOString().slice(0, 10); }
 let _nextId = 10;
 function newId() { return String(++_nextId); }
 
-// SEED_EVENTS: place demo events on today's actual date
-// In production, events are saved with the date the user picks in EventModal
+// SEED_EVENTS: demo events spread across the current week (Mon–Sun)
+// so week/month views show realistic data instead of all-empty days.
+// In production, events are saved with the date the user picks in EventModal.
+function _seedDateOffset(daysFromToday) {
+  const d = new Date();
+  d.setDate(d.getDate() + daysFromToday);
+  return dateStr(d);
+}
+function _seedAt(daysFromToday, h) {
+  const d = new Date();
+  d.setDate(d.getDate() + daysFromToday);
+  d.setHours(h, 0, 0, 0);
+  return d.toISOString();
+}
 const SEED_EVENTS = [
-  { id: "1", date: dateStr(), title: "個案紀錄", startTime: todayAt(9),  endTime: todayAt(12), note: "", status: "reply" },
-  { id: "2", date: dateStr(), title: "午休",     startTime: todayAt(12), endTime: todayAt(13), note: "", status: "free"  },
-  { id: "3", date: dateStr(), title: "社區訪視", startTime: todayAt(13), endTime: todayAt(17), note: "", status: "busy"  },
-  { id: "4", date: dateStr(), title: "個人時間", startTime: todayAt(18), endTime: todayAt(22), note: "", status: "free"  },
+  // Today — full demo day
+  { id: "1", date: dateStr(),              title: "個案紀錄", startTime: todayAt(9),  endTime: todayAt(12), note: "", status: "reply" },
+  { id: "2", date: dateStr(),              title: "午休",     startTime: todayAt(12), endTime: todayAt(13), note: "", status: "free"  },
+  { id: "3", date: dateStr(),              title: "社區訪視", startTime: todayAt(13), endTime: todayAt(17), note: "", status: "busy"  },
+  { id: "4", date: dateStr(),              title: "個人時間", startTime: todayAt(18), endTime: todayAt(22), note: "", status: "free"  },
+  // Yesterday
+  { id: "5", date: _seedDateOffset(-1),    title: "晨會",     startTime: _seedAt(-1, 9),  endTime: _seedAt(-1, 10), note: "", status: "busy" },
+  { id: "6", date: _seedDateOffset(-1),    title: "文書作業", startTime: _seedAt(-1, 10), endTime: _seedAt(-1, 12), note: "", status: "reply" },
+  { id: "7", date: _seedDateOffset(-1),    title: "個人時間", startTime: _seedAt(-1, 18), endTime: _seedAt(-1, 21), note: "", status: "free" },
+  // 2 days ago
+  { id: "8", date: _seedDateOffset(-2),    title: "家訪",     startTime: _seedAt(-2, 9),  endTime: _seedAt(-2, 11), note: "", status: "busy" },
+  { id: "9", date: _seedDateOffset(-2),    title: "空閒",     startTime: _seedAt(-2, 15), endTime: _seedAt(-2, 18), note: "", status: "free" },
+  // Tomorrow
+  { id: "10", date: _seedDateOffset(1),    title: "個案會議", startTime: _seedAt(1, 10), endTime: _seedAt(1, 12), note: "", status: "busy" },
+  { id: "11", date: _seedDateOffset(1),    title: "自由時間", startTime: _seedAt(1, 19), endTime: _seedAt(1, 22), note: "", status: "free" },
+  // 2 days from now
+  { id: "12", date: _seedDateOffset(2),    title: "教育訓練", startTime: _seedAt(2, 9),  endTime: _seedAt(2, 16), note: "", status: "busy" },
 ];
 
 // ─── Status engine ─────────────────────────────────────────────────
@@ -113,8 +143,8 @@ function fmtDateLabel(d = new Date()) {
 const SHARE_URL = "https://canwe.app/u/demo";
 
 // ─── Week date helpers ─────────────────────────────────────────────
-function getWeekBounds() {
-  const today = new Date();
+function getWeekBounds(refDate = null) {
+  const today = refDate ? new Date(refDate + "T12:00:00") : new Date();
   const dow   = today.getDay(); // 0=Sun
   const mon   = new Date(today); mon.setDate(today.getDate() - ((dow + 6) % 7));
   const sun   = new Date(mon);  sun.setDate(mon.getDate() + 6);
@@ -128,8 +158,8 @@ function getWeekBounds() {
   const range = `${fmtMD(mon)} – ${fmtMD(sun)}`;
   return { year, weekNum, range, mon, sun };
 }
-function getWeekHeader() {
-  const { year, weekNum, range } = getWeekBounds();
+function getWeekHeader(refDate = null) {
+  const { year, weekNum, range } = getWeekBounds(refDate);
   return `${year} 年 第 ${weekNum} 週｜${range}`;
 }
 
@@ -140,19 +170,18 @@ function getWeekDays(weekStart = 0) {
 }
 // Keep WEEK_DAYS for backwards compat (default Mon-start)
 const WEEK_DAYS = WEEK_DAYS_BASE;
-// Build array of 7 event-arrays for the current week from real events.
+// Build array of 7 event-arrays for the week containing refDate.
 // weekStart: 0=Mon, 1=Tue, ..., 6=Sun (matches WEEK_DAYS index)
-function buildWeekEvents(events, weekStart = 0) {
-  const today = new Date();
-  // dow: 0=Mon..6=Sun
-  const dow = (today.getDay() + 6) % 7;
-  // How many days back to reach the weekStart day
+// refDate: YYYY-MM-DD string — defaults to today if omitted
+function buildWeekEvents(events, weekStart = 0, refDate = null) {
+  const ref = refDate ? new Date(refDate + "T12:00:00") : new Date();
+  const dow = (ref.getDay() + 6) % 7; // 0=Mon..6=Sun
   let offset = dow - weekStart;
   if (offset < 0) offset += 7;
   const startOffset = -offset;
   return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(today.getDate() + startOffset + i);
+    const d = new Date(ref);
+    d.setDate(ref.getDate() + startOffset + i);
     const ds = dateStr(d);
     return events.filter(ev => ev.date === ds);
   });
@@ -337,22 +366,33 @@ html, body {
 
 /* ── Add/Edit event modal ── */
 .modal-backdrop {
-  position: fixed; inset: 0; background: rgba(58,52,46,0.28);
+  position: fixed; inset: 0; background: rgba(58,52,46,0.32);
   backdrop-filter: blur(4px); z-index: 150;
-  display: flex; align-items: flex-end; justify-content: center;
-  animation: bdin 0.22s ease both;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  animation: bdin 0.2s ease both;
 }
 @keyframes bdin { from { opacity:0 } to { opacity:1 } }
 .modal {
-  background: var(--surface); border-radius: 18px 18px 0 0;
-  width: 100%; max-width: 100%; padding: 24px 22px 40px; box-sizing: border-box;
-  display: flex; flex-direction: column; gap: 18px;
-  animation: slideup 0.28s cubic-bezier(0.16,1,0.3,1) both;
-  max-height: 92dvh; overflow-y: auto;
+  background: var(--surface); border-radius: 20px;
+  width: 100%; max-width: 400px; padding: 26px 24px; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 16px;
+  animation: modalpop 0.22s cubic-bezier(0.16,1,0.3,1) both;
+  max-height: 86dvh; overflow-y: auto;
+  box-shadow: 0 12px 40px rgba(58,52,46,0.22);
 }
-@keyframes slideup { from { transform: translateY(100%) } to { transform: none } }
+@keyframes modalpop { from { transform: scale(0.94); opacity: 0 } to { transform: none; opacity: 1 } }
 .modal-title { font-family: var(--font-d); font-style: italic; font-size: 1.2rem; }
-.modal-drag { width: 36px; height: 4px; border-radius: 2px; background: var(--border2); margin: 0 auto -6px; }
+.modal-drag { display: none; }
+
+/* ── Status dropdown select ── */
+.status-select {
+  background: var(--surface2); border: 1px solid var(--border2); border-radius: 9px;
+  color: var(--text); font-family: var(--font-b); font-size: 0.9rem; font-weight: 400;
+  padding: 11px 14px; outline: none; width: 100%; cursor: pointer;
+  transition: border-color 0.15s; appearance: auto;
+}
+.status-select:focus { border-color: var(--accent); }
 
 /* ── Form elements ── */
 .field { display: flex; flex-direction: column; gap: 6px; }
@@ -944,28 +984,11 @@ function EventModal({ event, onSave, onClose }) {
 
         <div className="field">
           <div className="field-label">這段時間別人可以怎麼找我？</div>
-          <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-            {STATUS_KEYS.map(k => {
-              const s = STATUS[k];
-              const selected = form.status === k;
-              return (
-                <div key={k}
-                  style={{
-                    display:"flex", alignItems:"center", gap:10,
-                    padding:"9px 12px", borderRadius:9,
-                    border:`1px solid ${selected ? s.color : "var(--border)"}`,
-                    background: selected ? s.bg : "var(--surface2)",
-                    cursor:"pointer", transition:"all 0.14s",
-                  }}
-                  onClick={() => set("status", k)}>
-                  <Pip status={k} size="sm" />
-                  <span style={{ fontSize:"0.88rem", fontWeight: selected ? 500 : 400, color: selected ? s.color : "var(--text)" }}>
-                    {s.label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+          <select className="status-select" value={form.status} onChange={e => set("status", e.target.value)}>
+            {STATUS_KEYS.map(k => (
+              <option key={k} value={k}>{STATUS[k].emoji} {STATUS[k].label}</option>
+            ))}
+          </select>
         </div>
 
         <div className="btn-row">
@@ -983,14 +1006,16 @@ function EventModal({ event, onSave, onClose }) {
 // Single preview: timeline bar + status blocks (no titles, no notes)
 // Two action buttons: 複製連結 + 存成圖片
 // ─── ShareSheet — extracted to components/ShareSheet.jsx ──────────
-function ShareSheet({ events, onClose, toast, mode = "today" }) {
-  const blocks    = buildBlocks(events.filter(ev => !ev.date || ev.date === dateStr()));
+function ShareSheet({ events, onClose, toast, mode = "today", refDate = null, weekStart = 0 }) {
+  const activeDate = refDate || dateStr();
+  const blocks    = buildBlocks(events.filter(ev => !ev.date || ev.date === activeDate));
   const daytime   = blocks.filter(b => b.end > 8 && b.start < 22 && b.status !== "offline");
-  const dateLabel = new Date().toLocaleDateString("zh-TW", { month:"long", day:"numeric" });
-  const weekday   = new Date().toLocaleDateString("zh-TW", { weekday:"long" });
+  const refDateObj = new Date(activeDate + "T12:00:00");
+  const dateLabel = refDateObj.toLocaleDateString("zh-TW", { month:"long", day:"numeric" });
+  const weekday   = refDateObj.toLocaleDateString("zh-TW", { weekday:"long" });
   const isWeek    = mode === "week";
 
-  const weekEvents = buildWeekEvents(events);
+  const weekEvents = buildWeekEvents(events, weekStart, activeDate);
 
   const copyLink = () => {
     navigator.clipboard?.writeText(SHARE_URL).catch(() => {});
@@ -1025,7 +1050,7 @@ function ShareSheet({ events, onClose, toast, mode = "today" }) {
               Can we…?
             </div>
             <div style={{ fontSize:"0.7rem", color:"var(--muted)", marginTop:1 }}>
-              {isWeek ? getWeekHeader() : `${weekday}｜${dateLabel}`}
+              {isWeek ? getWeekHeader(activeDate) : `${weekday}｜${dateLabel}`}
             </div>
           </div>
 
@@ -1391,7 +1416,7 @@ function EventsPage({ events, setEvents, displayRange, weekStart = 0, toast }) {
   const [expandedDay, setExpandedDay] = useState(null); // date string for expanded day in week/month
 
   const dayEvents  = events.filter(ev => !ev.date || ev.date === viewDate);
-  const weekEvents = buildWeekEvents(events, weekStart);
+  const weekEvents = buildWeekEvents(events, weekStart, viewDate);
   const todayStr   = dateStr();
 
   const handleSave = (ev) => {
@@ -1407,11 +1432,22 @@ function EventsPage({ events, setEvents, displayRange, weekStart = 0, toast }) {
 
   const handleDelete = (id) => { setEvents(prev => prev.filter(e => e.id !== id)); toast("已刪除"); };
 
-  // Week: toggle expand, no navigation
+  // Get the Monday(-equivalent) start date of the week containing viewDate
+  const getWeekStartDate = (refDateStr) => {
+    const ref = new Date(refDateStr + "T12:00:00");
+    const dow = (ref.getDay() + 6) % 7;
+    let offset = dow - weekStart;
+    if (offset < 0) offset += 7;
+    const d = new Date(ref);
+    d.setDate(ref.getDate() - offset);
+    return d;
+  };
+
+  // Week: toggle expand, no navigation — uses viewDate's week, not always today
   const handleWeekCellClick = (weekDayIdx) => {
-    const today = new Date();
-    const monOffset = -((today.getDay() + 6) % 7);
-    const d = new Date(today); d.setDate(today.getDate() + monOffset + weekDayIdx);
+    const weekStartDate = getWeekStartDate(viewDate);
+    const d = new Date(weekStartDate);
+    d.setDate(weekStartDate.getDate() + weekDayIdx);
     const ds = dateStr(d);
     setExpandedDay(prev => prev === ds ? null : ds);
   };
@@ -1425,10 +1461,8 @@ function EventsPage({ events, setEvents, displayRange, weekStart = 0, toast }) {
 
   const shiftDay = (n) => { const d = new Date(viewDate); d.setDate(d.getDate() + n); setViewDate(dateStr(d)); };
   const shiftWeek = (n) => {
-    const today = new Date();
-    const monOffset = -((today.getDay() + 6) % 7);
-    const mon = new Date(today); mon.setDate(today.getDate() + monOffset + n * 7);
-    setViewDate(dateStr(mon));
+    const d = new Date(viewDate); d.setDate(d.getDate() + n * 7);
+    setViewDate(dateStr(d));
     setExpandedDay(null);
   };
   const shiftMonth = (n) => {
@@ -1442,9 +1476,7 @@ function EventsPage({ events, setEvents, displayRange, weekStart = 0, toast }) {
 
   const dayLabel = vd.toLocaleDateString("zh-TW", { month:"numeric", day:"numeric", weekday:"short" });
   const weekLabel = (() => {
-    const today = new Date();
-    const monOffset = -((today.getDay() + 6) % 7);
-    const mon = new Date(today); mon.setDate(today.getDate() + monOffset);
+    const mon = getWeekStartDate(viewDate);
     const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
     const f = d => `${d.getMonth()+1}/${d.getDate()}`;
     return `${f(mon)} – ${f(sun)}`;
@@ -1530,13 +1562,15 @@ function EventsPage({ events, setEvents, displayRange, weekStart = 0, toast }) {
           <button className="date-nav-btn" onClick={onPrev}>‹</button>
           <div className="date-nav-label">{navLabel}</div>
           <button className="date-nav-btn" onClick={onNext}>›</button>
-          {!isToday && view === "day" && (
-            <button onClick={() => setViewDate(todayStr)}
-              style={{ fontSize:"0.7rem", color:"var(--accent)", background:"none", border:"none", cursor:"pointer", padding:"2px 6px" }}>
-              今天
-            </button>
-          )}
         </div>
+        {!isToday && view === "day" && (
+          <div style={{ display:"flex", justifyContent:"center", marginTop:2, marginBottom:2 }}>
+            <button onClick={() => setViewDate(todayStr)}
+              style={{ fontSize:"0.76rem", color:"var(--accent)", background:"none", border:"none", cursor:"pointer", padding:"4px 10px" }}>
+              回到今天
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Body */}
@@ -1557,12 +1591,9 @@ function EventsPage({ events, setEvents, displayRange, weekStart = 0, toast }) {
               onDayClick={handleWeekCellClick} weekStart={weekStart}
               expandedDay={expandedDay}
               getExpandDate={(di) => {
-                const today = new Date();
-                const dow = (today.getDay() + 6) % 7;
-                let offset = dow - weekStart;
-                if (offset < 0) offset += 7;
-                const d = new Date(today);
-                d.setDate(today.getDate() - offset + di);
+                const weekStartDate = getWeekStartDate(viewDate);
+                const d = new Date(weekStartDate);
+                d.setDate(weekStartDate.getDate() + di);
                 return dateStr(d);
               }}
             />
@@ -1611,7 +1642,7 @@ function EventsPage({ events, setEvents, displayRange, weekStart = 0, toast }) {
       <button className="fab" onClick={() => setModal("add")} title="新增事件">＋</button>
 
       {modal && <EventModal event={modal==="add"?{ date:viewDate }:modal} onSave={handleSave} onClose={() => setModal(null)} />}
-      {shareOpen && <ShareSheet events={events} toast={toast} mode={shareOpen} onClose={() => setShareOpen(null)} />}
+      {shareOpen && <ShareSheet events={events} toast={toast} mode={shareOpen} refDate={viewDate} weekStart={weekStart} onClose={() => setShareOpen(null)} />}
     </div>
   );
 }
