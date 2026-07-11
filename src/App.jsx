@@ -1,12 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── v0.9.14 ───────────────────────────────────────────────────────
-// 修正五項：
-// 1. 「回到今天」移到日期下方，間距調整
-// 2. 週視圖可正確換週（buildWeekEvents/weekLabel/handleWeekCellClick 改用 viewDate 而非固定 today）
-// 3. 分享會跟著切換的日期/週次更新（ShareSheet 新增 refDate prop）
-// 4. EventModal 改為置中卡片彈窗，狀態改為下拉選單
-// 5. SEED_EVENTS 分散到整週（今天前後各兩天），週/月視圖不再只顯示今天
+// ─── v0.9.15 ───────────────────────────────────────────────────────
+// 修正核心時區 bug：dateStr() 原本用 toISOString() 轉 UTC 再切字串，
+// 在 UTC+8（台灣）等時區會讓日期跨零時偏移，導致月/週視圖點擊某天卻
+// 框選/顯示另一天的資料。改為用本地時間（getFullYear/getMonth/getDate）
+// 組字串，徹底解決框框跳格與資料錯位問題。同步修正 minsToISO() 的相同問題。
 // Settings: remove emoji icons, restore clean border rows
 //   components/TimelineBar.jsx  — pure timeline bar display
 //   components/WeekView.jsx     — week grid display + day-click
@@ -62,8 +60,15 @@ function todayAt(h, m = 0) {
   return d.toISOString();
 }
 
-// Returns YYYY-MM-DD for any date object
-function dateStr(d = new Date()) { return d.toISOString().slice(0, 10); }
+// Returns YYYY-MM-DD using LOCAL time (not UTC — toISOString() shifts the
+// date across midnight in timezones ahead/behind UTC, causing month/week
+// cells to show the wrong day's data).
+function dateStr(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 let _nextId = 10;
 function newId() { return String(++_nextId); }
@@ -1266,7 +1271,7 @@ function isoToMins(iso) {
   return d.getHours() * 60 + d.getMinutes();
 }
 function minsToISO(mins) {
-  const today = new Date().toISOString().slice(0,10);
+  const today = dateStr(); // local date, not UTC
   return new Date(`${today}T${minsToTimeStr(mins)}:00`).toISOString();
 }
 
