@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── v0.9.15 ───────────────────────────────────────────────────────
-// 修正核心時區 bug：dateStr() 原本用 toISOString() 轉 UTC 再切字串，
-// 在 UTC+8（台灣）等時區會讓日期跨零時偏移，導致月/週視圖點擊某天卻
-// 框選/顯示另一天的資料。改為用本地時間（getFullYear/getMonth/getDate）
-// 組字串，徹底解決框框跳格與資料錯位問題。同步修正 minsToISO() 的相同問題。
+// ─── v0.9.16 ───────────────────────────────────────────────────────
+// 月視圖格子高度對齊修正：.mv-selected 的 outline-offset 改為負值（原本
+// 正值會讓被選中的格子往外多佔 1px，造成當週行高被撐開、跟其他週對不齊）。
+// 同步加上 box-sizing/flex-shrink/overflow 限制，避免圓形日期 badge 或
+// 狀態色點撐大格子本身。
 // Settings: remove emoji icons, restore clean border rows
 //   components/TimelineBar.jsx  — pure timeline bar display
 //   components/WeekView.jsx     — week grid display + day-click
@@ -472,6 +472,7 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
 /* ── Month view ── */
 .mv-grid {
   display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+  align-items: start;
 }
 .mv-day-hdr {
   text-align: center; font-size: 0.65rem; color: var(--muted2); padding: 4px 0;
@@ -482,15 +483,16 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
   align-items: center; justify-content: flex-start;
   padding: 4px 2px; border-radius: 8px; cursor: pointer;
   transition: background 0.14s; position: relative;
+  box-sizing: border-box; overflow: hidden;
 }
 .mv-cell:hover { background: var(--surface2); }
 .mv-cell.today { background: var(--surface2); }
-.mv-cell.today .mv-date { background: var(--text); color: var(--bg); border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
+.mv-cell.today .mv-date { background: var(--text); color: var(--bg); border-radius: 50%; width: 24px; height: 24px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
 .mv-cell.other-month .mv-date { color: var(--muted2); }
-.mv-date { font-size: 0.78rem; font-family: var(--font-b); color: var(--text); width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
-.mv-dots { display: flex; gap: 2px; margin-top: 2px; flex-wrap: wrap; justify-content: center; }
-.mv-dot { width: 5px; height: 5px; border-radius: 50%; }
-.mv-selected { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mv-date { font-size: 0.78rem; font-family: var(--font-b); color: var(--text); width: 24px; height: 24px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.mv-dots { display: flex; gap: 2px; margin-top: 2px; flex-wrap: wrap; justify-content: center; max-height: 8px; overflow: hidden; }
+.mv-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+.mv-selected { outline: 2px solid var(--accent); outline-offset: -1px; }
 .sh-blocks { display: flex; flex-direction: column; gap: 6px; }
 .sh-block {
   display: flex; align-items: center; gap: 12px;
