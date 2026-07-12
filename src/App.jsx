@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── v0.9.16 ───────────────────────────────────────────────────────
-// 月視圖格子高度對齊修正：.mv-selected 的 outline-offset 改為負值（原本
-// 正值會讓被選中的格子往外多佔 1px，造成當週行高被撐開、跟其他週對不齊）。
-// 同步加上 box-sizing/flex-shrink/overflow 限制，避免圓形日期 badge 或
-// 狀態色點撐大格子本身。
+// ─── v0.9.17 ───────────────────────────────────────────────────────
+// 全站視覺統一：
+// 1. 新增統一 radius token（--radius-sm/--radius/--radius-lg/--radius-full），
+//    取代原本散落的 7/8/9/10/12/20/99px 各自為政的圓角值
+// 2. 週視圖列的 padding/radius 對齊設定頁 row 樣式（14px 18px / 12px）
+// 3. 所有頁面標題統一用 --font-d 斜體：頁面級標題 1.4rem，子頁/彈窗標題 1.15rem
+//    （原本今天=1.5rem、設定=1.4rem、行程日期列=非斜體 Noto Serif，三種不同風格）
+// 4. 新增 .btn-compact class 取代散落的 inline padding/fontSize override
 // Settings: remove emoji icons, restore clean border rows
 //   components/TimelineBar.jsx  — pure timeline bar display
 //   components/WeekView.jsx     — week grid display + day-click
@@ -207,7 +210,10 @@ const CSS = `
   --muted:    #8A8078;
   --muted2:   #B0A89E;
   --accent:   #7C6F62;
-  --radius:   12px;
+  --radius:      12px;   /* cards */
+  --radius-sm:    8px;   /* small elements: inputs, chips, pills, mini rows */
+  --radius-lg:   18px;   /* sheets, large surfaces */
+  --radius-full: 999px;  /* fully rounded: badges, dots-as-pills */
   --font-d:   'DM Serif Display', Georgia, serif;
   --font-b:   'Noto Serif TC', 'Hiragino Mincho ProN', Georgia, serif;
   --c-busy:    #C98D86;
@@ -321,7 +327,7 @@ html, body {
 /* ── Buttons ── */
 .btn-row { display: flex; gap: 10px; }
 .btn {
-  flex: 1; padding: 12px 10px; border: none; border-radius: 10px; cursor: pointer;
+  flex: 1; padding: 12px 10px; border: none; border-radius: var(--radius); cursor: pointer;
   font-family: var(--font-b); font-size: 0.85rem; font-weight: 500;
   display: flex; align-items: center; justify-content: center; gap: 7px;
   transition: transform 0.13s, filter 0.13s;
@@ -332,8 +338,9 @@ html, body {
 .btn-p:hover { filter: brightness(1.1); }
 .btn-g { background: var(--surface2); color: var(--text); border: 1px solid var(--border2); }
 .btn-g:hover { border-color: rgba(58,52,46,0.28); }
-.btn-outline { flex: none; padding: 8px 14px; background: none; border: 1px solid var(--border2); color: var(--text); border-radius: 9px; font-size: 0.8rem; font-family: var(--font-b); cursor: pointer; transition: border-color 0.15s; }
+.btn-outline { flex: none; padding: 8px 14px; background: none; border: 1px solid var(--border2); color: var(--text); border-radius: var(--radius-sm); font-size: 0.8rem; font-family: var(--font-b); cursor: pointer; transition: border-color 0.15s; }
 .btn-outline:hover { border-color: var(--accent); }
+.btn-compact { padding: 6px 12px !important; font-size: 0.78rem !important; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ── Events page ── */
@@ -355,7 +362,7 @@ html, body {
 .ev-title { flex: 1; font-size: 0.9rem; font-weight: 500; }
 .ev-status-badge {
   font-size: 0.68rem; font-weight: 400; padding: 3px 8px;
-  border-radius: 99px; border: 1px solid; white-space: nowrap;
+  border-radius: var(--radius-full); border: 1px solid; white-space: nowrap;
 }
 .ev-actions { display: flex; align-items: center; gap: 4px; padding-right: 10px; }
 .ev-action-btn {
@@ -379,7 +386,7 @@ html, body {
 }
 @keyframes bdin { from { opacity:0 } to { opacity:1 } }
 .modal {
-  background: var(--surface); border-radius: 20px;
+  background: var(--surface); border-radius: var(--radius-lg);
   width: 100%; max-width: 400px; padding: 26px 24px; box-sizing: border-box;
   display: flex; flex-direction: column; gap: 16px;
   animation: modalpop 0.22s cubic-bezier(0.16,1,0.3,1) both;
@@ -387,12 +394,12 @@ html, body {
   box-shadow: 0 12px 40px rgba(58,52,46,0.22);
 }
 @keyframes modalpop { from { transform: scale(0.94); opacity: 0 } to { transform: none; opacity: 1 } }
-.modal-title { font-family: var(--font-d); font-style: italic; font-size: 1.2rem; }
+.modal-title { font-family: var(--font-d); font-style: italic; font-size: 1.15rem; }
 .modal-drag { display: none; }
 
 /* ── Status dropdown select ── */
 .status-select {
-  background: var(--surface2); border: 1px solid var(--border2); border-radius: 9px;
+  background: var(--surface2); border: 1px solid var(--border2); border-radius: var(--radius-sm);
   color: var(--text); font-family: var(--font-b); font-size: 0.9rem; font-weight: 400;
   padding: 11px 14px; outline: none; width: 100%; cursor: pointer;
   transition: border-color 0.15s; appearance: auto;
@@ -403,7 +410,7 @@ html, body {
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field-label { font-size: 0.72rem; letter-spacing: 0.12em; color: var(--muted); }
 .input {
-  background: var(--surface2); border: 1px solid var(--border2); border-radius: 9px;
+  background: var(--surface2); border: 1px solid var(--border2); border-radius: var(--radius-sm);
   color: var(--text); font-family: var(--font-b); font-size: 0.9rem; font-weight: 400;
   padding: 11px 14px; outline: none; width: 100%;
   transition: border-color 0.15s;
@@ -417,7 +424,7 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
 .status-picker { display: flex; flex-direction: column; gap: 7px; }
 .status-option {
   display: flex; align-items: center; gap: 12px;
-  padding: 11px 14px; border-radius: 10px; border: 1px solid var(--border);
+  padding: 11px 14px; border-radius: var(--radius); border: 1px solid var(--border);
   cursor: pointer; transition: border-color 0.15s, background 0.15s;
   background: var(--surface2);
 }
@@ -430,9 +437,9 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
 .sh-head { text-align: center; }
 .sh-title { font-family: var(--font-b); font-weight: 500; font-size: 1.15rem; letter-spacing: 0.02em; line-height: 1.5; }
 .sh-date  { font-size: 0.74rem; color: var(--muted); margin-top: 4px; letter-spacing: 0.06em; }
-.sh-tabs  { display: flex; background: var(--surface2); border-radius: 9px; padding: 3px; gap: 3px; }
+.sh-tabs  { display: flex; background: var(--surface2); border-radius: var(--radius-sm); padding: 3px; gap: 3px; }
 .sh-tab   {
-  flex: 1; padding: 8px; border: none; border-radius: 7px; cursor: pointer;
+  flex: 1; padding: 8px; border: none; border-radius: var(--radius-sm); cursor: pointer;
   font-family: var(--font-b); font-size: 0.8rem; font-weight: 400;
   background: none; color: var(--muted); transition: all 0.16s;
 }
@@ -440,13 +447,13 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
 
 /* ── View toggle: rectangular segmented control ── */
 .view-toggle {
-  display: flex; background: var(--surface2); border-radius: 10px;
+  display: flex; background: var(--surface2); border-radius: var(--radius);
   padding: 3px; gap: 3px; width: fit-content; align-self: center;
 }
 .view-toggle-btn {
   padding: 6px 18px; border: none; background: none; cursor: pointer;
   font-family: var(--font-b); font-size: 0.82rem; font-weight: 400;
-  color: var(--muted); border-radius: 8px; transition: all 0.16s; white-space: nowrap;
+  color: var(--muted); border-radius: var(--radius-sm); transition: all 0.16s; white-space: nowrap;
 }
 .view-toggle-btn.on {
   background: var(--surface); color: var(--text); font-weight: 500;
@@ -465,7 +472,7 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
 }
 .date-nav-btn:hover { color: var(--text); }
 .date-nav-label {
-  font-family: var(--font-b); font-size: 0.95rem; font-weight: 500;
+  font-family: var(--font-d); font-style: italic; font-size: 1.15rem; font-weight: 400;
   color: var(--text); min-width: 130px; text-align: center;
 }
 
@@ -481,7 +488,7 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
 .mv-cell {
   aspect-ratio: 1; display: flex; flex-direction: column;
   align-items: center; justify-content: flex-start;
-  padding: 4px 2px; border-radius: 8px; cursor: pointer;
+  padding: 4px 2px; border-radius: var(--radius-sm); cursor: pointer;
   transition: background 0.14s; position: relative;
   box-sizing: border-box; overflow: hidden;
 }
@@ -496,7 +503,7 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
 .sh-blocks { display: flex; flex-direction: column; gap: 6px; }
 .sh-block {
   display: flex; align-items: center; gap: 12px;
-  padding: 12px 16px; border-radius: 10px; border: 1px solid var(--border);
+  padding: 12px 16px; border-radius: var(--radius); border: 1px solid var(--border);
 }
 .sh-block-time { font-size: 0.75rem; color: var(--muted); width: 112px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
 .sh-block-lbl  { font-size: 0.88rem; font-weight: 500; }
@@ -504,16 +511,16 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
 .legend-item { display: flex; align-items: center; gap: 7px; font-size: 0.76rem; color: var(--muted); }
 .privacy-note {
   font-size: 0.71rem; color: var(--muted2); text-align: center;
-  border: 1px solid var(--border); border-radius: 9px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
   padding: 11px 16px; line-height: 1.8;
 }
 
 
 /* ── Settings ── */
 .sec-head { font-size: 0.68rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted2); margin-bottom: 10px; font-weight: 400; }
-.gcal-connected { display: flex; align-items: center; gap: 12px; background: #8FA89D12; border: 1px solid #8FA89D32; border-radius: 10px; padding: 13px 16px; }
+.gcal-connected { display: flex; align-items: center; gap: 12px; background: #8FA89D12; border: 1px solid #8FA89D32; border-radius: var(--radius); padding: 13px 16px; }
 .gcal-connect-btn {
-  width: 100%; padding: 13px; border-radius: 10px; border: 1px dashed rgba(58,52,46,0.2); background: none;
+  width: 100%; padding: 13px; border-radius: var(--radius); border: 1px dashed rgba(58,52,46,0.2); background: none;
   color: var(--text); font-family: var(--font-b); font-size: 0.85rem; font-weight: 400; cursor: pointer;
   display: flex; align-items: center; justify-content: center; gap: 9px; transition: border-color 0.18s, color 0.18s;
 }
@@ -524,7 +531,7 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
 .rule-kw  { flex: 1; font-size: 0.85rem; }
 .rule-arr { color: var(--muted2); font-size: 0.8rem; }
 .sel {
-  background: var(--surface2); border: 1px solid var(--border2); border-radius: 7px;
+  background: var(--surface2); border: 1px solid var(--border2); border-radius: var(--radius-sm);
   color: var(--text); font-family: var(--font-b); font-size: 0.78rem;
   padding: 5px 8px; cursor: pointer; outline: none; appearance: auto;
 }
@@ -534,7 +541,7 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
 /* ── Toast ── */
 .toast {
   position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(60px);
-  background: var(--text); color: var(--bg); border-radius: 8px;
+  background: var(--text); color: var(--bg); border-radius: var(--radius-sm);
   padding: 9px 22px; font-family: var(--font-b); font-size: 0.8rem; white-space: nowrap;
   transition: transform 0.28s cubic-bezier(0.16,1,0.3,1); z-index: 50; pointer-events: none;
   /* keep toast centered within viewport — acceptable for toast notifications */
@@ -567,13 +574,13 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
 .status-color-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 8px; }
 .status-name-input { flex: 1; background: none; border: none; outline: none; font-family: var(--font-b); font-size: 0.9rem; font-weight: 500; color: var(--text); padding: 4px 0; border-bottom: 1px solid transparent; transition: border-color 0.15s; }
 .status-name-input:focus { border-bottom-color: var(--accent); }
-.status-desc-input { width: 100%; background: var(--surface2); border: 1px solid var(--border2); border-radius: 7px; font-family: var(--font-b); font-size: 0.78rem; color: var(--muted); padding: 6px 10px; outline: none; margin-top: 4px; transition: border-color 0.15s; }
+.status-desc-input { width: 100%; background: var(--surface2); border: 1px solid var(--border2); border-radius: var(--radius-sm); font-family: var(--font-b); font-size: 0.78rem; color: var(--muted); padding: 6px 10px; outline: none; margin-top: 4px; transition: border-color 0.15s; }
 .status-desc-input:focus { border-color: var(--accent); }
 
 /* ── Time range picker ── */
 .time-range-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .time-range-label { font-size: 0.82rem; font-weight: 500; min-width: 52px; }
-.time-range-select { background: var(--surface2); border: 1px solid var(--border2); border-radius: 8px; color: var(--text); font-family: var(--font-b); font-size: 0.85rem; padding: 8px 12px; cursor: pointer; outline: none; flex: 1; }
+.time-range-select { background: var(--surface2); border: 1px solid var(--border2); border-radius: var(--radius-sm); color: var(--text); font-family: var(--font-b); font-size: 0.85rem; padding: 8px 12px; cursor: pointer; outline: none; flex: 1; }
 
 /* ── Recurring schedule ── */
 .recur-row {
@@ -592,7 +599,7 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
 .recur-time-row { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; }
 .recur-time-sep { color: var(--muted2); }
 .recur-time-sel {
-  background: var(--surface2); border: 1px solid var(--border2); border-radius: 7px;
+  background: var(--surface2); border: 1px solid var(--border2); border-radius: var(--radius-sm);
   color: var(--text); font-family: var(--font-b); font-size: 0.8rem;
   padding: 5px 8px; cursor: pointer; outline: none;
 }
@@ -604,7 +611,7 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
   display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;
 }
 .recur-tag-chip {
-  font-size: 0.68rem; padding: 2px 8px; border-radius: 99px;
+  font-size: 0.68rem; padding: 2px 8px; border-radius: var(--radius-full);
   background: var(--surface2); color: var(--muted); border: 1px solid var(--border);
 }
 
@@ -612,11 +619,11 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
 /* ── Share bottom sheet ── */
 .sh-sheet-backdrop { position: fixed; inset: 0; background: rgba(58,52,46,0.22); backdrop-filter: blur(3px); z-index: 150; animation: bdin 0.2s ease both; }
 @keyframes bdin { from { opacity:0 } to { opacity:1 } }
-.sh-sheet { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-radius: 20px 20px 0 0; padding: 20px 22px 44px; display: flex; flex-direction: column; gap: 16px; z-index: 151; animation: slideup 0.28s cubic-bezier(0.16,1,0.3,1) both; max-height: 88dvh; overflow-y: auto; }
+.sh-sheet { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: 20px 22px 44px; display: flex; flex-direction: column; gap: 16px; z-index: 151; animation: slideup 0.28s cubic-bezier(0.16,1,0.3,1) both; max-height: 88dvh; overflow-y: auto; }
 @keyframes slideup { from { transform: translateY(100%) } to { transform: none } }
 .sh-sheet-handle { width: 36px; height: 4px; border-radius: 2px; background: var(--border2); margin: 0 auto -4px; }
 .sh-sheet-title { font-family: var(--font-d); font-style: italic; font-size: 1.15rem; }
-.sh-preview { background: var(--surface2); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.sh-preview { background: var(--surface2); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 8px; }
 .sh-preview-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
 .sh-preview-row:last-child { border-bottom: none; }
 .sh-preview-time { font-size: 0.75rem; color: var(--muted); min-width: 100px; font-variant-numeric: tabular-nums; }
@@ -630,7 +637,7 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
 .dv-col { flex: 1; position: relative; border-left: 1px solid var(--border); }
 .dv-gridline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--border); pointer-events: none; }
 .dv-gridline.half { border-top-style: dashed; opacity: 0.5; }
-.dv-event { position: absolute; left: 6px; right: 6px; border-radius: 8px; border-left: 3px solid; padding: 5px 8px; cursor: pointer; display: flex; flex-direction: column; overflow: hidden; user-select: none; box-shadow: 0 1px 4px rgba(58,52,46,0.08); }
+.dv-event { position: absolute; left: 6px; right: 6px; border-radius: var(--radius-sm); border-left: 3px solid; padding: 5px 8px; cursor: pointer; display: flex; flex-direction: column; overflow: hidden; user-select: none; box-shadow: 0 1px 4px rgba(58,52,46,0.08); }
 .dv-event-title { font-family: var(--font-b); font-size: 0.78rem; font-weight: 500; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dv-event-time  { font-family: var(--font-b); font-size: 0.62rem; opacity: 0.75; margin-top: 2px; }
 .dv-resize { position: absolute; left: 0; right: 0; height: 10px; cursor: ns-resize; z-index: 5; }
@@ -655,7 +662,7 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
 .ob-sub    { font-size: 0.82rem; color: var(--muted); text-align: center; line-height: 1.7; letter-spacing: 0.04em; }
 .ob-card   { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; width: 100%; display: flex; flex-direction: column; gap: 16px; }
 .ob-label  { font-size: 0.78rem; font-weight: 500; color: var(--text); }
-.ob-select { background: var(--surface2); border: 1px solid var(--border2); border-radius: 9px; color: var(--text); font-family: var(--font-b); font-size: 0.92rem; padding: 10px 14px; outline: none; width: 100%; appearance: auto; cursor: pointer; }
+.ob-select { background: var(--surface2); border: 1px solid var(--border2); border-radius: var(--radius-sm); color: var(--text); font-family: var(--font-b); font-size: 0.92rem; padding: 10px 14px; outline: none; width: 100%; appearance: auto; cursor: pointer; }
 .ob-cross-note { font-size: 0.72rem; color: var(--muted); text-align: center; line-height: 1.6; }
 `;
 
@@ -851,8 +858,8 @@ function WeekGrid({ weekEvents, rangeStart = 8, rangeEnd = 22, onDayClick, weekS
           <div key={di}>
             <div onClick={() => onDayClick && onDayClick(di)}
               style={{
-                display:"flex", alignItems:"center", gap:12, padding:"10px 14px",
-                borderRadius: isExpanded ? "10px 10px 0 0" : 10,
+                display:"flex", alignItems:"center", gap:12, padding:"14px 18px",
+                borderRadius: isExpanded ? "12px 12px 0 0" : 12,
                 cursor: onDayClick ? "pointer" : "default",
                 borderTop:`1px solid ${isToday ? "var(--accent)" : "var(--border)"}`,
                 borderLeft:`1px solid ${isToday ? "var(--accent)" : "var(--border)"}`,
@@ -895,9 +902,9 @@ function WeekGrid({ weekEvents, rangeStart = 8, rangeEnd = 22, onDayClick, weekS
             {isExpanded && (
               <div style={{
                 border:`1px solid ${isToday ? "var(--accent)" : "var(--border)"}`,
-                borderTop:"none", borderRadius:"0 0 10px 10px",
+                borderTop:"none", borderRadius:"0 0 12px 12px",
                 background: isToday ? "rgba(124,111,98,0.04)" : "var(--surface)",
-                padding:"10px 14px 14px 54px",
+                padding:"14px 18px 18px 60px",
               }}>
                 {/* Date label */}
                 {colDate && (
@@ -1081,7 +1088,7 @@ function ShareSheet({ events, onClose, toast, mode = "today", refDate = null, we
                     <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
                       {sec.days.map(d => (
                         <div key={d.di} style={{
-                          padding:"5px 12px", borderRadius:99,
+                          padding:"5px 12px", borderRadius:999,
                           background:"var(--surface2)", border:"1px solid var(--border2)",
                           fontSize:"0.8rem", fontFamily:"var(--font-b)", color:"var(--text)",
                         }}>
@@ -1182,7 +1189,7 @@ function HomePage({ events, displayRange, setTab, toast }) {
 
         {/* Date header */}
         <div style={{ marginBottom:22 }}>
-          <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.5rem", letterSpacing:"-0.01em" }}>今天</div>
+          <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.4rem", letterSpacing:"-0.01em" }}>今天</div>
           <div style={{ fontSize:"0.82rem", color:"var(--muted)", marginTop:2 }}>{fmtDateLabel()}</div>
         </div>
 
@@ -1642,8 +1649,7 @@ function EventsPage({ events, setEvents, displayRange, weekStart = 0, toast }) {
 
       {/* Share button */}
       <div style={{ position:"absolute", top:12, right:22, zIndex:10 }}>
-        <button className="btn-outline" style={{ fontSize:"0.75rem", padding:"5px 10px" }}
-          onClick={() => setShareOpen(shareMode)}>↗ 分享</button>
+        <button className="btn-outline btn-compact" onClick={() => setShareOpen(shareMode)}>↗ 分享</button>
       </div>
 
       <button className="fab" onClick={() => setModal("add")} title="新增事件">＋</button>
@@ -1701,7 +1707,7 @@ function SettingsBack({ onBack, title }) {
       <button className="settings-back" onClick={onBack}>
         ← 設定
       </button>
-      <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.3rem" }}>{title}</div>
+      <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.15rem" }}>{title}</div>
     </div>
   );
 }
@@ -1943,7 +1949,7 @@ function GcalSettings({ events, setEvents, onBack, toast }) {
                         const ks = STATUS[k]; const sel = ev.status === k;
                         return (
                           <button key={k} onClick={() => handleAdjustStatus(ev.gcalId, k)}
-                            style={{ border:`1px solid ${sel ? ks.color : "var(--border2)"}`, background:sel ? ks.bg : "var(--surface)", color:sel ? ks.color : "var(--muted)", borderRadius:7, padding:"3px 9px", fontSize:"0.72rem", fontFamily:"var(--font-b)", cursor:"pointer", fontWeight:sel?500:400, transition:"all 0.14s" }}>
+                            style={{ border:`1px solid ${sel ? ks.color : "var(--border2)"}`, background:sel ? ks.bg : "var(--surface)", color:sel ? ks.color : "var(--muted)", borderRadius:8, padding:"3px 9px", fontSize:"0.72rem", fontFamily:"var(--font-b)", cursor:"pointer", fontWeight:sel?500:400, transition:"all 0.14s" }}>
                             {ks.label}
                           </button>
                         );
@@ -2084,7 +2090,7 @@ function RecurringSettings({ recurring, setRecurring, onBack, toast }) {
               const s = STATUS[k]; const sel = form.status===k;
               return (
                 <div key={k} onClick={() => setF("status",k)}
-                  style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 12px", borderRadius:9,
+                  style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 12px", borderRadius:8,
                     border:`1px solid ${sel?s.color:"var(--border)"}`,
                     background: sel?s.bg:"var(--surface2)", cursor:"pointer", transition:"all 0.14s" }}>
                   <Pip status={k} size="sm" />
@@ -2109,9 +2115,9 @@ function RecurringSettings({ recurring, setRecurring, onBack, toast }) {
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:18 }}>
         <div>
           <button className="settings-back" onClick={onBack}>← 設定</button>
-          <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.3rem" }}>固定排程</div>
+          <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.15rem" }}>固定排程</div>
         </div>
-        <button className="btn-outline" style={{ padding:"6px 14px", fontSize:"0.8rem" }} onClick={openNew}>＋ 新增</button>
+        <button className="btn-outline btn-compact" onClick={openNew}>＋ 新增</button>
       </div>
 
       {recurring.length === 0 ? (
