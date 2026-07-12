@@ -1,13 +1,16 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── v0.9.17 ───────────────────────────────────────────────────────
-// 全站視覺統一：
-// 1. 新增統一 radius token（--radius-sm/--radius/--radius-lg/--radius-full），
-//    取代原本散落的 7/8/9/10/12/20/99px 各自為政的圓角值
-// 2. 週視圖列的 padding/radius 對齊設定頁 row 樣式（14px 18px / 12px）
-// 3. 所有頁面標題統一用 --font-d 斜體：頁面級標題 1.4rem，子頁/彈窗標題 1.15rem
-//    （原本今天=1.5rem、設定=1.4rem、行程日期列=非斜體 Noto Serif，三種不同風格）
-// 4. 新增 .btn-compact class 取代散落的 inline padding/fontSize override
+// ─── v0.9.18 ───────────────────────────────────────────────────────
+// 桌面版顯示修正：
+// 1. .app 補上 position:relative，讓內部 absolute 定位的分享按鈕正確
+//    限制在 460px 容器內，不再飄到桌面瀏覽器右上角
+// 2. .bnav / .fab / .sh-sheet / 首頁固定底部列 全部改用置中 + max-width:460px，
+//    不再用 left:0/right:0 撐滿整個桌面瀏覽器視窗寬度
+// 設定頁重新分組（參考圖四樣式）：
+//   資料來源（Google Calendar / 固定排程）
+//   狀態與規則（狀態管理 / 關鍵字規則）
+//   顯示偏好（週起始日 / 顯示時間範圍）
+// 每組加小型 uppercase 分類標籤，視覺更有層次
 // Settings: remove emoji icons, restore clean border rows
 //   components/TimelineBar.jsx  — pure timeline bar display
 //   components/WeekView.jsx     — week grid display + day-click
@@ -254,12 +257,13 @@ html, body {
 .app {
   max-width: 460px; margin: 0 auto; min-height: 100dvh;
   display: flex; flex-direction: column; padding-bottom: 64px;
+  position: relative;
 }
 
 /* ── Bottom Nav ── */
 .bnav {
-  position: fixed; bottom: 0; left: 0; right: 0;
-  width: 100%;
+  position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 460px;
   display: flex; background: rgba(246,243,238,0.96);
   border-top: 1px solid var(--border);
   backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
@@ -619,7 +623,7 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
 /* ── Share bottom sheet ── */
 .sh-sheet-backdrop { position: fixed; inset: 0; background: rgba(58,52,46,0.22); backdrop-filter: blur(3px); z-index: 150; animation: bdin 0.2s ease both; }
 @keyframes bdin { from { opacity:0 } to { opacity:1 } }
-.sh-sheet { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: 20px 22px 44px; display: flex; flex-direction: column; gap: 16px; z-index: 151; animation: slideup 0.28s cubic-bezier(0.16,1,0.3,1) both; max-height: 88dvh; overflow-y: auto; }
+.sh-sheet { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 460px; background: var(--surface); border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: 20px 22px 44px; display: flex; flex-direction: column; gap: 16px; z-index: 151; animation: slideup 0.28s cubic-bezier(0.16,1,0.3,1) both; max-height: 88dvh; overflow-y: auto; }
 @keyframes slideup { from { transform: translateY(100%) } to { transform: none } }
 .sh-sheet-handle { width: 36px; height: 4px; border-radius: 2px; background: var(--border2); margin: 0 auto -4px; }
 .sh-sheet-title { font-family: var(--font-d); font-style: italic; font-size: 1.15rem; }
@@ -647,7 +651,13 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
 .dv-now-dot { position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--c-busy); }
 
 /* ── FAB ── */
-.fab { position: fixed; bottom: 88px; right: 16px; width: 48px; height: 48px; border-radius: 50%; background: var(--text); color: var(--bg); border: none; cursor: pointer; font-size: 1.4rem; display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 12px rgba(58,52,46,0.22); transition: transform 0.15s, box-shadow 0.15s; z-index: 40; }
+.fab {
+  position: fixed; bottom: 88px;
+  left: calc(50% + min(50vw, 230px) - 64px);
+  width: 48px; height: 48px; border-radius: 50%; background: var(--text); color: var(--bg);
+  border: none; cursor: pointer; font-size: 1.4rem; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 3px 12px rgba(58,52,46,0.22); transition: transform 0.15s, box-shadow 0.15s; z-index: 40;
+}
 .fab:hover { transform: scale(1.07); }
 .fab:active { transform: scale(0.95); }
 
@@ -1249,8 +1259,9 @@ function HomePage({ events, displayRange, setTab, toast }) {
 
       {/* Fixed bottom action bar */}
       <div style={{
-        position:"fixed", bottom:80, left:0, right:0,
-        padding:"10px 22px 12px",
+        position:"fixed", bottom:80, left:"50%", transform:"translateX(-50%)",
+        width:"100%", maxWidth:460,
+        padding:"10px 22px 12px", boxSizing:"border-box",
         background:"var(--bg)",
         display:"flex", gap:10,
         zIndex:50,
@@ -2211,29 +2222,55 @@ function SettingsPage({ rules, setRules, events, setEvents, displayRange, setDis
   if (sub === "gcal")      return <GcalSettings      events={events} setEvents={setEvents} onBack={() => setSub(null)} toast={toast} />;
   if (sub === "recurring") return <RecurringSettings recurring={recurring} setRecurring={setRecurring} onBack={() => setSub(null)} toast={toast} />;
 
-  const MENU = [
-    { key:"gcal",      title:"Google Calendar 匯入", desc:"連結並匯入行事曆事件" },
-    { key:"recurring", title:"固定排程",             desc:`${recurring.length} 個固定排程` },
-    { key:"status",    title:"狀態管理",             desc:"自訂狀態名稱與說明文字" },
-    { key:"keywords",  title:"關鍵字規則",           desc:"匯入時自動推薦狀態" },
-    { key:"weekstart",  title:"週起始日",             desc:`目前：週${["一","二","三","四","五","六","日"][weekStart]}` },
-    { key:"timerange",  title:"顯示時間範圍",         desc:`目前 ${String(displayRange.start).padStart(2,"0")}:00 – ${String(displayRange.end).padStart(2,"0")}:00` },
+  const SECTIONS = [
+    {
+      label: "資料來源",
+      items: [
+        { key:"gcal",      title:"Google Calendar 匯入", desc:"連結並匯入行事曆事件" },
+        { key:"recurring", title:"固定排程",             desc:`${recurring.length} 個固定排程` },
+      ],
+    },
+    {
+      label: "狀態與規則",
+      items: [
+        { key:"status",   title:"狀態管理",   desc:"自訂狀態名稱與說明文字" },
+        { key:"keywords", title:"關鍵字規則", desc:"匯入時自動推薦狀態" },
+      ],
+    },
+    {
+      label: "顯示偏好",
+      items: [
+        { key:"weekstart",  title:"週起始日",     desc:`目前：週${["一","二","三","四","五","六","日"][weekStart]}` },
+        { key:"timerange",  title:"顯示時間範圍", desc:`目前 ${String(displayRange.start).padStart(2,"0")}:00 – ${String(displayRange.end).padStart(2,"0")}:00` },
+      ],
+    },
   ];
 
   return (
     <div className="page" style={{ paddingTop:26 }}>
-      <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.4rem", marginBottom:20 }}>設定</div>
-      <div className="settings-menu">
-        {MENU.map(({ key, title, desc }) => (
-          <div key={key} className="settings-row" onClick={() => setSub(key)}>
-            <div className="settings-row-body">
-              <div className="settings-row-title">{title}</div>
-              <div className="settings-row-desc">{desc}</div>
-            </div>
-            <span className="settings-row-arrow">›</span>
+      <div style={{ fontFamily:"var(--font-d)", fontStyle:"italic", fontSize:"1.4rem", marginBottom:22 }}>設定</div>
+      {SECTIONS.map(sec => (
+        <div key={sec.label} style={{ marginBottom:22 }}>
+          <div style={{
+            fontSize:"0.68rem", fontWeight:500, letterSpacing:"0.12em",
+            color:"var(--muted2)", textTransform:"uppercase",
+            marginBottom:8, paddingLeft:2,
+          }}>
+            {sec.label}
           </div>
-        ))}
-      </div>
+          <div className="settings-menu">
+            {sec.items.map(({ key, title, desc }) => (
+              <div key={key} className="settings-row" onClick={() => setSub(key)}>
+                <div className="settings-row-body">
+                  <div className="settings-row-title">{title}</div>
+                  <div className="settings-row-desc">{desc}</div>
+                </div>
+                <span className="settings-row-arrow">›</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
