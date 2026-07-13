@@ -1,16 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── v0.9.18 ───────────────────────────────────────────────────────
-// 桌面版顯示修正：
-// 1. .app 補上 position:relative，讓內部 absolute 定位的分享按鈕正確
-//    限制在 460px 容器內，不再飄到桌面瀏覽器右上角
-// 2. .bnav / .fab / .sh-sheet / 首頁固定底部列 全部改用置中 + max-width:460px，
-//    不再用 left:0/right:0 撐滿整個桌面瀏覽器視窗寬度
-// 設定頁重新分組（參考圖四樣式）：
-//   資料來源（Google Calendar / 固定排程）
-//   狀態與規則（狀態管理 / 關鍵字規則）
-//   顯示偏好（週起始日 / 顯示時間範圍）
-// 每組加小型 uppercase 分類標籤，視覺更有層次
+// ─── v0.9.19 ───────────────────────────────────────────────────────
+// 電腦版改為真正的桌面排版（側邊欄導覽 + 主內容區，Notion/Linear 風格）：
+// - < 768px：維持手機版原樣（底部導覽、FAB、bottom sheet）
+// - ≥ 768px：左側固定側邊欄（220px，含 icon + 文字），主內容區佔滿剩餘寬度
+//   .bnav 在桌面版隱藏，改用 .sidebar；FAB／分享 sheet 改為靠右浮動而非置中
+//   頁面內容 padding 加寬到 40px，max-width 720px，善用桌面空間而非硬塞 460px 手機殼
 // Settings: remove emoji icons, restore clean border rows
 //   components/TimelineBar.jsx  — pure timeline bar display
 //   components/WeekView.jsx     — week grid display + day-click
@@ -254,16 +249,60 @@ html, body {
 @keyframes blink { 0%,100% { opacity:.2 } 50% { opacity:.8 } }
 
 /* ── Shell ── */
+/* ── App shell: mobile default (single column, bottom nav) ── */
+.app-shell {
+  min-height: 100dvh; display: flex;
+}
 .app {
-  max-width: 460px; margin: 0 auto; min-height: 100dvh;
+  flex: 1; max-width: 460px; margin: 0 auto; min-height: 100dvh;
   display: flex; flex-direction: column; padding-bottom: 64px;
   position: relative;
 }
+.sidebar { display: none; }
 
+/* ── Desktop: sidebar nav + wide main content ── */
+@media (min-width: 768px) {
+  .app-shell {
+    max-width: 1100px; margin: 0 auto;
+  }
+  .sidebar {
+    display: flex; flex-direction: column;
+    width: 220px; flex-shrink: 0;
+    padding: 32px 16px; gap: 4px;
+    border-right: 1px solid var(--border);
+    position: sticky; top: 0; height: 100dvh;
+  }
+  .sidebar-logo {
+    font-family: var(--font-d); font-style: italic; font-size: 1.3rem;
+    padding: 0 12px; margin-bottom: 28px; color: var(--text);
+  }
+  .sidebar-tab {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px; border-radius: var(--radius-sm);
+    border: none; background: none; cursor: pointer;
+    font-family: var(--font-b); font-size: 0.92rem; color: var(--muted);
+    transition: background 0.15s, color 0.15s; text-align: left;
+  }
+  .sidebar-tab svg { width: 19px; height: 19px; stroke-width: 1.5; flex-shrink: 0; }
+  .sidebar-tab:hover { background: var(--surface2); color: var(--text); }
+  .sidebar-tab.on { background: var(--surface2); color: var(--text); font-weight: 500; }
+
+  .app {
+    max-width: none; margin: 0; padding-bottom: 0;
+    border-left: 1px solid var(--border);
+  }
+  .bnav { display: none; }
+  .fab { left: auto !important; right: 32px; }
+  .sh-sheet { left: auto; right: 32px; transform: none; max-width: 420px; border-radius: var(--radius-lg); bottom: 32px; box-shadow: 0 12px 40px rgba(58,52,46,0.22); }
+  .sh-sheet-backdrop { background: rgba(58,52,46,0.14); }
+
+  /* Wider page padding + two-column card grid where relevant */
+  .page { padding-left: 40px; padding-right: 40px; max-width: 720px; }
+}
 /* ── Bottom Nav ── */
 .bnav {
-  position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
-  width: 100%; max-width: 460px;
+  position: fixed; bottom: 0; left: 0; right: 0;
+  width: 100%; max-width: 460px; margin: 0 auto;
   display: flex; background: rgba(246,243,238,0.96);
   border-top: 1px solid var(--border);
   backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
@@ -623,7 +662,7 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
 /* ── Share bottom sheet ── */
 .sh-sheet-backdrop { position: fixed; inset: 0; background: rgba(58,52,46,0.22); backdrop-filter: blur(3px); z-index: 150; animation: bdin 0.2s ease both; }
 @keyframes bdin { from { opacity:0 } to { opacity:1 } }
-.sh-sheet { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 460px; background: var(--surface); border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: 20px 22px 44px; display: flex; flex-direction: column; gap: 16px; z-index: 151; animation: slideup 0.28s cubic-bezier(0.16,1,0.3,1) both; max-height: 88dvh; overflow-y: auto; }
+.sh-sheet { position: fixed; bottom: 0; left: 0; right: 0; max-width: 460px; margin: 0 auto; background: var(--surface); border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: 20px 22px 44px; display: flex; flex-direction: column; gap: 16px; z-index: 151; animation: slideup 0.28s cubic-bezier(0.16,1,0.3,1) both; max-height: 88dvh; overflow-y: auto; }
 @keyframes slideup { from { transform: translateY(100%) } to { transform: none } }
 .sh-sheet-handle { width: 36px; height: 4px; border-radius: 2px; background: var(--border2); margin: 0 auto -4px; }
 .sh-sheet-title { font-family: var(--font-d); font-style: italic; font-size: 1.15rem; }
@@ -652,11 +691,13 @@ input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-
 
 /* ── FAB ── */
 .fab {
-  position: fixed; bottom: 88px;
-  left: calc(50% + min(50vw, 230px) - 64px);
+  position: fixed; bottom: 88px; right: calc(50% - 230px + 16px);
   width: 48px; height: 48px; border-radius: 50%; background: var(--text); color: var(--bg);
   border: none; cursor: pointer; font-size: 1.4rem; display: flex; align-items: center; justify-content: center;
   box-shadow: 0 3px 12px rgba(58,52,46,0.22); transition: transform 0.15s, box-shadow 0.15s; z-index: 40;
+}
+@media (max-width: 520px) {
+  .fab { right: 16px; }
 }
 .fab:hover { transform: scale(1.07); }
 .fab:active { transform: scale(0.95); }
@@ -1259,8 +1300,8 @@ function HomePage({ events, displayRange, setTab, toast }) {
 
       {/* Fixed bottom action bar */}
       <div style={{
-        position:"fixed", bottom:80, left:"50%", transform:"translateX(-50%)",
-        width:"100%", maxWidth:460,
+        position:"fixed", bottom:80, left:0, right:0,
+        maxWidth:460, margin:"0 auto",
         padding:"10px 22px 12px", boxSizing:"border-box",
         background:"var(--bg)",
         display:"flex", gap:10,
@@ -2357,20 +2398,34 @@ export default function CanWe() {
         <div className="ls-pip" />
       </div>
 
-      <div className="app">
-        {tab==="首頁" && <HomePage events={events} displayRange={displayRange} setTab={setTab} toast={toast} />}
-        {tab==="行程" && <EventsPage events={events} setEvents={setEvents} displayRange={displayRange} weekStart={weekStart} toast={toast} />}
-        {tab==="設定" && <SettingsPage rules={rules} setRules={setRules} events={events} setEvents={setEvents} displayRange={displayRange} setDisplayRange={setDisplayRange} recurring={recurring} setRecurring={setRecurring} weekStart={weekStart} setWeekStart={setWeekStart} toast={toast} />}
-      </div>
+      <div className="app-shell">
+        {/* Desktop sidebar — hidden on mobile via CSS */}
+        <nav className="sidebar">
+          <div className="sidebar-logo">Can we…?</div>
+          {NAV_ITEMS.map(({ key, label, icon }) => (
+            <button key={key} className={`sidebar-tab ${tab===key?"on":""}`} onClick={() => setTab(key)}>
+              {icon()}
+              {label}
+            </button>
+          ))}
+        </nav>
 
-      <nav className="bnav">
-        {NAV_ITEMS.map(({ key, label, icon }) => (
-          <button key={key} className={`bnav-tab ${tab===key?"on":""}`} onClick={() => setTab(key)}>
-            {icon()}
-            {label}
-          </button>
-        ))}
-      </nav>
+        <div className="app">
+          {tab==="首頁" && <HomePage events={events} displayRange={displayRange} setTab={setTab} toast={toast} />}
+          {tab==="行程" && <EventsPage events={events} setEvents={setEvents} displayRange={displayRange} weekStart={weekStart} toast={toast} />}
+          {tab==="設定" && <SettingsPage rules={rules} setRules={setRules} events={events} setEvents={setEvents} displayRange={displayRange} setDisplayRange={setDisplayRange} recurring={recurring} setRecurring={setRecurring} weekStart={weekStart} setWeekStart={setWeekStart} toast={toast} />}
+        </div>
+
+        {/* Mobile bottom nav — hidden on desktop via CSS */}
+        <nav className="bnav">
+          {NAV_ITEMS.map(({ key, label, icon }) => (
+            <button key={key} className={`bnav-tab ${tab===key?"on":""}`} onClick={() => setTab(key)}>
+              {icon()}
+              {label}
+            </button>
+          ))}
+        </nav>
+      </div>
 
       <div className={`toast ${toastOn?"show":""}`}>{toastMsg}</div>
     </>
