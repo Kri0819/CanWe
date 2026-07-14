@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── v0.9.19 ───────────────────────────────────────────────────────
-// 電腦版改為真正的桌面排版（側邊欄導覽 + 主內容區，Notion/Linear 風格）：
-// - < 768px：維持手機版原樣（底部導覽、FAB、bottom sheet）
-// - ≥ 768px：左側固定側邊欄（220px，含 icon + 文字），主內容區佔滿剩餘寬度
-//   .bnav 在桌面版隱藏，改用 .sidebar；FAB／分享 sheet 改為靠右浮動而非置中
-//   頁面內容 padding 加寬到 40px，max-width 720px，善用桌面空間而非硬塞 460px 手機殼
+// ─── v0.9.19b ──────────────────────────────────────────────────────
+// 修正 v0.9.19 的兩個 bug：
+// 1. .bnav 的 display:none（桌面版）被寫在後面才定義的 .bnav 基礎樣式覆蓋掉，
+//    導致桌面版底部導覽列沒有真的消失。改為先定義基礎樣式，media query 覆寫
+//    規則放在後面，並加 !important 保險。
+// 2. .app-shell 原本設了 max-width:1100px，導致桌面版兩側留白過多、不是滿版。
+//    移除上限，讓側邊欄 + 主內容區真正撐滿整個瀏覽器寬度，主內容區內部再用
+//    max-width:840px 置中維持可讀性，但不再限制整體 shell 寬度。
 // Settings: remove emoji icons, restore clean border rows
 //   components/TimelineBar.jsx  — pure timeline bar display
 //   components/WeekView.jsx     — week grid display + day-click
@@ -260,10 +262,28 @@ html, body {
 }
 .sidebar { display: none; }
 
-/* ── Desktop: sidebar nav + wide main content ── */
+/* ── Bottom Nav (mobile default) ── */
+.bnav {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  width: 100%; max-width: 460px; margin: 0 auto;
+  display: flex; background: rgba(246,243,238,0.96);
+  border-top: 1px solid var(--border);
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  z-index: 100;
+}
+.bnav-tab {
+  flex: 1; border: none; background: none; cursor: pointer;
+  padding: 14px 4px 18px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  font-family: var(--font-b); font-size: 0.7rem; font-weight: 400;
+  color: var(--muted2); transition: color 0.16s;
+}
+.bnav-tab.on { color: var(--text); }
+.bnav-tab svg { width: 24px; height: 24px; stroke-width: 1.5; }
+
+/* ── Desktop: sidebar nav + full-width main content ── */
 @media (min-width: 768px) {
   .app-shell {
-    max-width: 1100px; margin: 0 auto;
+    max-width: none; margin: 0;
   }
   .sidebar {
     display: flex; flex-direction: column;
@@ -288,34 +308,16 @@ html, body {
   .sidebar-tab.on { background: var(--surface2); color: var(--text); font-weight: 500; }
 
   .app {
-    max-width: none; margin: 0; padding-bottom: 0;
-    border-left: 1px solid var(--border);
+    max-width: none; margin: 0; padding-bottom: 0; flex: 1; width: 100%;
   }
-  .bnav { display: none; }
+  .bnav { display: none !important; }
   .fab { left: auto !important; right: 32px; }
   .sh-sheet { left: auto; right: 32px; transform: none; max-width: 420px; border-radius: var(--radius-lg); bottom: 32px; box-shadow: 0 12px 40px rgba(58,52,46,0.22); }
   .sh-sheet-backdrop { background: rgba(58,52,46,0.14); }
 
-  /* Wider page padding + two-column card grid where relevant */
-  .page { padding-left: 40px; padding-right: 40px; max-width: 720px; }
+  /* Content stays readable width but centred within the now-unbounded main column */
+  .page { padding-left: 48px; padding-right: 48px; max-width: 840px; margin: 0 auto; }
 }
-/* ── Bottom Nav ── */
-.bnav {
-  position: fixed; bottom: 0; left: 0; right: 0;
-  width: 100%; max-width: 460px; margin: 0 auto;
-  display: flex; background: rgba(246,243,238,0.96);
-  border-top: 1px solid var(--border);
-  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
-  z-index: 100;
-}
-.bnav-tab {
-  flex: 1; border: none; background: none; cursor: pointer;
-  padding: 14px 4px 18px; display: flex; flex-direction: column; align-items: center; gap: 4px;
-  font-family: var(--font-b); font-size: 0.7rem; font-weight: 400;
-  color: var(--muted2); transition: color 0.16s;
-}
-.bnav-tab.on { color: var(--text); }
-.bnav-tab svg { width: 24px; height: 24px; stroke-width: 1.5; }
 
 /* ── Page header ── */
 .page-header {
