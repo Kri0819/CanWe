@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── v0.9.19b ──────────────────────────────────────────────────────
-// 修正 v0.9.19 的兩個 bug：
-// 1. .bnav 的 display:none（桌面版）被寫在後面才定義的 .bnav 基礎樣式覆蓋掉，
-//    導致桌面版底部導覽列沒有真的消失。改為先定義基礎樣式，media query 覆寫
-//    規則放在後面，並加 !important 保險。
-// 2. .app-shell 原本設了 max-width:1100px，導致桌面版兩側留白過多、不是滿版。
-//    移除上限，讓側邊欄 + 主內容區真正撐滿整個瀏覽器寬度，主內容區內部再用
-//    max-width:840px 置中維持可讀性，但不再限制整體 shell 寬度。
+// ─── v0.9.19c ──────────────────────────────────────────────────────
+// 修正桌面版三頁排版不一致的根本原因：
+// HomePage/EventsPage 用 inline flex 佈局（無 .page class），完全不受
+// .page 的 max-width:840px 限制，撐到全螢幕寬度且內容貼左；SettingsPage
+// 用了 .page class 但因為 .page 本身沒有 width:100%，反而縮到內容自然
+// 寬度、擠在畫面右側——三頁各自表現不同，因為它們用了不同的容器邏輯。
+// 解法：不管子層用什麼 class，統一在 .app 的直接子層套用
+// max-width:840px + margin:auto，讓三個頁面在桌面版有一致、置中、
+// 讀起來舒服的內容寬度。
 // Settings: remove emoji icons, restore clean border rows
 //   components/TimelineBar.jsx  — pure timeline bar display
 //   components/WeekView.jsx     — week grid display + day-click
@@ -310,13 +311,20 @@ html, body {
   .app {
     max-width: none; margin: 0; padding-bottom: 0; flex: 1; width: 100%;
   }
+  /* Universal desktop content cap: applies to every direct child of .app,
+     regardless of whether it uses .page or a custom inline flex layout.
+     This fixes HomePage/EventsPage (inline styles, no .page class) drifting
+     to full width while SettingsPage (.page) stayed narrow and off-centre. */
+  .app > * {
+    width: 100%; max-width: 840px; margin-left: auto; margin-right: auto;
+  }
   .bnav { display: none !important; }
   .fab { left: auto !important; right: 32px; }
   .sh-sheet { left: auto; right: 32px; transform: none; max-width: 420px; border-radius: var(--radius-lg); bottom: 32px; box-shadow: 0 12px 40px rgba(58,52,46,0.22); }
   .sh-sheet-backdrop { background: rgba(58,52,46,0.14); }
 
   /* Content stays readable width but centred within the now-unbounded main column */
-  .page { padding-left: 48px; padding-right: 48px; max-width: 840px; margin: 0 auto; }
+  .page { width: 100%; padding-left: 48px; padding-right: 48px; max-width: 840px; margin: 0 auto; box-sizing: border-box; }
 }
 
 /* ── Page header ── */
