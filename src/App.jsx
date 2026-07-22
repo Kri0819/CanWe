@@ -1,14 +1,19 @@
 import { useState, useEffect, useRef } from "react";
 
-// ─── v0.9.19c ──────────────────────────────────────────────────────
-// 修正桌面版三頁排版不一致的根本原因：
-// HomePage/EventsPage 用 inline flex 佈局（無 .page class），完全不受
-// .page 的 max-width:840px 限制，撐到全螢幕寬度且內容貼左；SettingsPage
-// 用了 .page class 但因為 .page 本身沒有 width:100%，反而縮到內容自然
-// 寬度、擠在畫面右側——三頁各自表現不同，因為它們用了不同的容器邏輯。
-// 解法：不管子層用什麼 class，統一在 .app 的直接子層套用
-// max-width:840px + margin:auto，讓三個頁面在桌面版有一致、置中、
-// 讀起來舒服的內容寬度。
+// ─── v0.9.20 — Local Data Foundation ───────────────────────────────
+// 建立可銜接 Supabase 的本地資料層：
+//   storageAdapter.js    — 最底層儲存（window.storage 優先，fallback localStorage）
+//   canweRepository.js   — 唯一資料存取入口，統一 envelope 結構
+//     { schemaVersion, updatedAt, data:{ events, rules, recurringSchedules,
+//       weekStart, displayRange, statusSettings, onboarded } }
+// App root 新增 dataReady 閘門：資料載入完成前不渲染主畫面，也不會用
+// SEED_EVENTS/DEFAULT_RULES 覆蓋使用者已儲存但為空陣列的行程/規則。
+// 舊版分散的 canwe:displayRange / canwe:onboarded 會自動遷移到新的
+// canwe:appData，且不會讓既有使用者重新看到 onboarding。
+// 狀態管理設定（自訂 label/description）提升為全域 state，透過
+// applyStatusOverrides() 在每次渲染前同步套用到共用的 STATUS 物件，
+// 首頁／日視圖／週視圖／月視圖／事件彈窗／分享預覽／匯入預覽全部立即同步，
+// 不需個別元件加 prop。
 // Settings: remove emoji icons, restore clean border rows
 //   components/TimelineBar.jsx  — pure timeline bar display
 //   components/WeekView.jsx     — week grid display + day-click
@@ -24,13 +29,36 @@ import { useState, useEffect, useRef } from "react";
 // ─── Status config ─────────────────────────────────────────────────
 // In multi-file project: import { STATUS, STATUS_KEYS, PRIORITY, STATUS_HINTS, guessStatus } from './statusConfig.js'
 // Inline below for single-file build compatibility.
-const STATUS = {
+const STATUS_BASE = {
   busy:    { color: "#C98D86", label: "忙碌",      bg: "#C98D8614", barColor: "#C98D86", emoji: "🔴" },
   urgent:  { color: "#D6B183", label: "急事可聯繫", bg: "#D6B18314", barColor: "#D6B183", emoji: "🟠" },
   reply:   { color: "#C8BE97", label: "可回訊息",  bg: "#C8BE9714", barColor: "#C8BE97", emoji: "🟡" },
   free:    { color: "#8FA89D", label: "空閒",      bg: "#8FA89D14", barColor: "#8FA89D", emoji: "🟢" },
   offline: { color: "#B5AEA7", label: "休息中",    bg: "#B5AEA714", barColor: "#B5AEA7", emoji: "🌙" },
 };
+// STATUS is mutated in-place (not replaced) whenever statusSettings changes,
+// so every existing STATUS[key].label / .description reference throughout
+// the app (23+ call sites) picks up the new value without needing to be
+// individually rewritten to accept a prop. This is safe because STATUS's
+// shape (keys, colors, priority, order) never changes — only label/description
+// text is user-editable, and only App root ever calls applyStatusOverrides().
+const STATUS = { ...STATUS_BASE };
+/**
+ * Apply user-customised label/description onto the shared STATUS object.
+ * Only `label` and `description` may be overridden — key, color, bg,
+ * barColor, emoji, and priority/order remain fixed.
+ * @param {object} statusSettings  { busy: {label, description}, ... }
+ */
+function applyStatusOverrides(statusSettings) {
+  for (const key of Object.keys(STATUS_BASE)) {
+    const override = statusSettings?.[key];
+    STATUS[key] = {
+      ...STATUS_BASE[key],
+      label: (override?.label && override.label.trim()) ? override.label.trim() : STATUS_BASE[key].label,
+      description: override?.description ?? "",
+    };
+  }
+}
 const STATUS_KEYS = ["busy", "urgent", "reply", "free", "offline"];
 const PRIORITY    = { busy: 5, urgent: 4, reply: 3, free: 2, offline: 1 };
 const STATUS_HINTS = { busy: "", urgent: "", reply: "", free: "", offline: "" };
@@ -735,29 +763,187 @@ function injectCSS() {
   document.head.appendChild(el);
 }
 
-// ─── Persistent storage helpers ───────────────────────────────────
-const RANGE_KEY = "canwe:displayRange";
-const ONBOARD_KEY = "canwe:onboarded";
+// ─── storageAdapter — extracted to services/storageAdapter.js ─────
+// In multi-file project: import { storageAdapter } from './services/storageAdapter.js'
+// Lowest-level storage. Prefers window.storage, falls back to localStorage.
+// React components never call this directly — only canweRepository does.
+const storageAdapter = (() => {
+  function hasWindowStorage() {
+    try {
+      return typeof window !== "undefined" && window.storage
+        && typeof window.storage.get === "function" && typeof window.storage.set === "function";
+    } catch (_) { return false; }
+  }
+  function hasLocalStorage() {
+    try { return typeof window !== "undefined" && !!window.localStorage; } catch (_) { return false; }
+  }
 
-async function loadRange() {
-  try {
-    const r = await window.storage.get(RANGE_KEY);
-    if (r?.value) return JSON.parse(r.value);
-  } catch (_) {}
-  return null;
-}
-async function saveRange(range) {
-  try { await window.storage.set(RANGE_KEY, JSON.stringify(range)); } catch (_) {}
-}
-async function loadOnboarded() {
-  try {
-    const r = await window.storage.get(ONBOARD_KEY);
-    return r?.value === "1";
-  } catch (_) { return false; }
-}
-async function saveOnboarded() {
-  try { await window.storage.set(ONBOARD_KEY, "1"); } catch (_) {}
-}
+  async function getItem(key) {
+    try {
+      if (hasWindowStorage()) {
+        try {
+          const r = await window.storage.get(key);
+          if (r?.value != null) return r.value;
+        } catch (_) {}
+      }
+      if (hasLocalStorage()) {
+        try { return window.localStorage.getItem(key); } catch (_) { return null; }
+      }
+      return null;
+    } catch (_) { return null; }
+  }
+
+  async function setItem(key, value) {
+    let ok = false;
+    if (hasWindowStorage()) {
+      try { const r = await window.storage.set(key, value); ok = !!r || ok; } catch (_) {}
+    }
+    if (hasLocalStorage()) {
+      try { window.localStorage.setItem(key, value); ok = true; } catch (_) {}
+    }
+    return ok;
+  }
+
+  async function removeItem(key) {
+    let ok = false;
+    if (hasWindowStorage()) {
+      try { await window.storage.delete(key); ok = true; } catch (_) {}
+    }
+    if (hasLocalStorage()) {
+      try { window.localStorage.removeItem(key); ok = true; } catch (_) {}
+    }
+    return ok;
+  }
+
+  return { getItem, setItem, removeItem };
+})();
+
+// ─── canweRepository — extracted to services/canweRepository.js ───
+// In multi-file project: import { canweRepository } from './services/canweRepository.js'
+// Single source of truth for ALL CanWe data. Pages only call this —
+// never storageAdapter, window.storage, or localStorage directly.
+//
+// Future:
+// guest user -> local storage adapter (current implementation, via storageAdapter)
+// authenticated user -> Supabase adapter (replaces storageAdapter internals only)
+// after login -> merge or migrate guest data to user account (not implemented this pass)
+const canweRepository = (() => {
+  const APP_DATA_KEY = "canwe:appData";
+  const SCHEMA_VERSION = 1;
+  const LEGACY_RANGE_KEY = "canwe:displayRange";
+  const LEGACY_ONBOARD_KEY = "canwe:onboarded";
+
+  function safeParse(json, fallback) {
+    if (json == null) return fallback;
+    try { return JSON.parse(json); } catch (_) { return fallback; }
+  }
+  function safeStringify(value, fallback = "null") {
+    try { return JSON.stringify(value); } catch (_) { return fallback; }
+  }
+
+  function emptyEnvelope() {
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      updatedAt: new Date().toISOString(),
+      data: {
+        events: null,          // null = "no saved data yet" — caller may seed demo events
+        rules: null,           // null = "no saved data yet" — caller may seed default rules
+        recurringSchedules: [],
+        weekStart: 0,
+        displayRange: { start: 8, end: 22 },
+        statusSettings: {},
+        onboarded: false,
+      },
+    };
+  }
+
+  async function migrateLegacyData() {
+    const [legacyRangeRaw, legacyOnboardRaw] = await Promise.all([
+      storageAdapter.getItem(LEGACY_RANGE_KEY),
+      storageAdapter.getItem(LEGACY_ONBOARD_KEY),
+    ]);
+    const hadRange = legacyRangeRaw != null;
+    const hadOnboard = legacyOnboardRaw != null;
+    if (!hadRange && !hadOnboard) return null;
+
+    const envelope = emptyEnvelope();
+    if (hadRange) {
+      const parsed = safeParse(legacyRangeRaw, null);
+      if (parsed && typeof parsed.start === "number" && typeof parsed.end === "number") {
+        envelope.data.displayRange = parsed;
+      }
+    }
+    if (hadOnboard) {
+      envelope.data.onboarded = legacyOnboardRaw === "1" || legacyOnboardRaw === "true";
+    }
+    // Migrated users keep events/rules as "not yet decided" so the caller
+    // seeds the same demo data they'd have seen originally — but onboarding
+    // is NOT re-triggered since we already migrated their onboarded flag.
+    envelope.data.events = null;
+    envelope.data.rules = null;
+    return envelope;
+  }
+
+  async function writeEnvelope(envelope) {
+    envelope.updatedAt = new Date().toISOString();
+    await storageAdapter.setItem(APP_DATA_KEY, safeStringify(envelope));
+  }
+
+  async function readEnvelope() {
+    const raw = await storageAdapter.getItem(APP_DATA_KEY);
+    if (raw != null) {
+      const parsed = safeParse(raw, null);
+      if (parsed && parsed.data) return parsed;
+      return null; // corrupted JSON — treat as "no data", never crash
+    }
+    const migrated = await migrateLegacyData();
+    if (migrated) { await writeEnvelope(migrated); return migrated; }
+    return null;
+  }
+
+  async function loadCanWeData() {
+    const envelope = await readEnvelope();
+    if (!envelope) {
+      const fresh = emptyEnvelope();
+      return { ...fresh.data, isFirstLaunch: true };
+    }
+    const data = envelope.data || {};
+    return {
+      events: Object.prototype.hasOwnProperty.call(data, "events") ? data.events : null,
+      rules: Object.prototype.hasOwnProperty.call(data, "rules") ? data.rules : null,
+      recurringSchedules: Array.isArray(data.recurringSchedules) ? data.recurringSchedules : [],
+      weekStart: typeof data.weekStart === "number" ? data.weekStart : 0,
+      displayRange: data.displayRange && typeof data.displayRange.start === "number" ? data.displayRange : { start: 8, end: 22 },
+      statusSettings: data.statusSettings && typeof data.statusSettings === "object" ? data.statusSettings : {},
+      onboarded: !!data.onboarded,
+      isFirstLaunch: false,
+    };
+  }
+
+  async function saveField(field, value) {
+    const envelope = (await readEnvelope()) || emptyEnvelope();
+    envelope.data[field] = value;
+    await writeEnvelope(envelope);
+  }
+
+  return {
+    loadCanWeData,
+    saveEvents:              (events) => saveField("events", Array.isArray(events) ? events : []),
+    saveRules:                (rules) => saveField("rules", Array.isArray(rules) ? rules : []),
+    saveRecurringSchedules:      (rs) => saveField("recurringSchedules", Array.isArray(rs) ? rs : []),
+    saveWeekStart:                (w) => saveField("weekStart", typeof w === "number" ? w : 0),
+    saveDisplayRange:             (r) => saveField("displayRange", r),
+    saveStatusSettings:          (ss) => saveField("statusSettings", ss && typeof ss === "object" ? ss : {}),
+    saveOnboarded:                (o) => saveField("onboarded", !!o),
+    async clearCanWeData() {
+      await Promise.all([
+        storageAdapter.removeItem(APP_DATA_KEY),
+        storageAdapter.removeItem(LEGACY_RANGE_KEY),
+        storageAdapter.removeItem(LEGACY_ONBOARD_KEY),
+      ]);
+    },
+  };
+})();
 
 // Cross-day aware helpers for DayView
 // If start > end (e.g. 22→8), total = (24 - start) + end hours
@@ -788,8 +974,8 @@ function Onboarding({ onDone }) {
   const confirm = async () => {
     if (!valid) return;
     const range = { start, end };
-    await saveRange(range);
-    await saveOnboarded();
+    await canweRepository.saveDisplayRange(range);
+    await canweRepository.saveOnboarded(true);
     onDone(range);
   };
 
@@ -1775,12 +1961,28 @@ function SettingsBack({ onBack, title }) {
 }
 
 // Sub-page: 狀態管理
-function StatusSettings({ onBack, toast }) {
+// Reads/writes the GLOBAL statusSettings (lifted to App root), so saving
+// here immediately reflects everywhere: Home, DayView, WeekView, month
+// view, EventModal, ShareSheet, GcalSettings preview.
+function StatusSettings({ statusSettings, setStatusSettings, onBack, toast }) {
   const [statuses, setStatuses] = useState(
-    STATUS_KEYS.map(k => ({ key: k, label: STATUS[k].label, desc: "" }))
+    STATUS_KEYS.map(k => ({
+      key: k,
+      label: statusSettings?.[k]?.label || STATUS_BASE[k].label,
+      desc: statusSettings?.[k]?.description || "",
+    }))
   );
   const set = (k, field, val) =>
     setStatuses(s => s.map(x => x.key === k ? { ...x, [field]: val } : x));
+
+  const save = () => {
+    const next = { ...statusSettings };
+    for (const { key, label, desc } of statuses) {
+      next[key] = { label: label.trim() || STATUS_BASE[key].label, description: desc };
+    }
+    setStatusSettings(next); // triggers App root auto-save + applyStatusOverrides on next render
+    toast("已儲存 ✓");
+  };
 
   return (
     <div className="page" style={{ paddingTop:20 }}>
@@ -1790,14 +1992,14 @@ function StatusSettings({ onBack, toast }) {
           自訂每個狀態的名稱與說明。名稱會顯示在分享頁和行程卡片上。
         </div>
         {statuses.map(({ key, label, desc }) => {
-          const s = STATUS[key];
+          const s = STATUS_BASE[key];
           return (
             <div key={key} className="status-editor-row">
               <div className="status-color-dot" style={{ background: s.color }} />
               <div style={{ flex:1 }}>
                 <input className="status-name-input" value={label}
                   onChange={e => set(key, "label", e.target.value)}
-                  placeholder={STATUS[key].label} />
+                  placeholder={s.label} />
                 <input className="status-desc-input" value={desc}
                   onChange={e => set(key, "desc", e.target.value)}
                   placeholder="說明文字（選填，例：正在開會，請稍後聯繫）" />
@@ -1806,7 +2008,7 @@ function StatusSettings({ onBack, toast }) {
           );
         })}
       </div>
-      <button className="btn btn-p" style={{ alignSelf:"flex-start", flex:"none", padding:"11px 28px" }} onClick={() => toast("已儲存 ✓")}>儲存</button>
+      <button className="btn btn-p" style={{ alignSelf:"flex-start", flex:"none", padding:"11px 28px" }} onClick={save}>儲存</button>
     </div>
   );
 }
@@ -2263,10 +2465,10 @@ function WeekStartSettings({ weekStart, setWeekStart, onBack, toast }) {
   );
 }
 
-function SettingsPage({ rules, setRules, events, setEvents, displayRange, setDisplayRange, recurring, setRecurring, weekStart, setWeekStart, toast }) {
+function SettingsPage({ rules, setRules, events, setEvents, displayRange, setDisplayRange, recurring, setRecurring, weekStart, setWeekStart, statusSettings, setStatusSettings, toast }) {
   const [sub, setSub] = useState(null);
 
-  if (sub === "status")    return <StatusSettings    onBack={() => setSub(null)} toast={toast} />;
+  if (sub === "status")    return <StatusSettings    statusSettings={statusSettings} setStatusSettings={setStatusSettings} onBack={() => setSub(null)} toast={toast} />;
   if (sub === "keywords")  return <KeywordSettings   rules={rules} setRules={setRules} onBack={() => setSub(null)} toast={toast} />;
   if (sub === "timerange") return <TimeRangeSettings displayRange={displayRange} setDisplayRange={setDisplayRange} onBack={() => setSub(null)} toast={toast} />;
   if (sub === "weekstart") return <WeekStartSettings weekStart={weekStart} setWeekStart={setWeekStart} onBack={() => setSub(null)} toast={toast} />;
@@ -2352,28 +2554,73 @@ const NAV_ITEMS = [
 // ─── App root ──────────────────────────────────────────────────────
 export default function CanWe() {
   const [loadingVisible, setLoadingVisible] = useState(true);
-  const [onboarded, setOnboarded]   = useState(true);   // assume done until storage says otherwise
+  const [dataReady, setDataReady]   = useState(false); // true once loadCanWeData() resolves
+  const [onboarded, setOnboarded]   = useState(true);  // assume done until data says otherwise
   const [tab, setTab]               = useState("首頁");
-  const [events, setEvents]         = useState(SEED_EVENTS);
-  const [rules, setRules]           = useState(DEFAULT_RULES);
-  const [recurring, setRecurring]   = useState(DEFAULT_RECURRING);
+  const [events, setEvents]         = useState([]);
+  const [rules, setRules]           = useState([]);
+  const [recurring, setRecurring]   = useState([]);
   const [weekStart, setWeekStart]   = useState(0); // 0=Mon..6=Sun
-  const [displayRange, setDisplayRange] = useState({ start: 8, end: 22 }); // default 08–22
+  const [displayRange, setDisplayRange] = useState({ start: 8, end: 22 });
+  const [statusSettings, setStatusSettings] = useState({}); // { busy:{label,description}, ... }
   const [toastMsg, setToastMsg]     = useState("");
   const [toastOn, setToastOn]       = useState(false);
   const toastTimer = useRef(null);
 
+  // ── Initial load: read from repository, seed defaults ONLY on true first launch ──
   useEffect(() => {
     injectCSS();
 
-    // Load persisted range + onboarding flag from storage
     (async () => {
-      const [wasOnboarded, savedRange] = await Promise.all([loadOnboarded(), loadRange()]);
-      if (savedRange) setDisplayRange(savedRange);
-      setOnboarded(wasOnboarded);
+      const loaded = await canweRepository.loadCanWeData();
+
+      // events === null and rules === null both mean "never saved before" —
+      // safe to seed demo/default data. An empty array [] means the user
+      // explicitly has no events/rules and must NOT be overwritten.
+      setEvents(loaded.events !== null ? loaded.events : SEED_EVENTS);
+      setRules(loaded.rules !== null ? loaded.rules : DEFAULT_RULES);
+      setRecurring(loaded.recurringSchedules);
+      setWeekStart(loaded.weekStart);
+      setDisplayRange(loaded.displayRange);
+      setStatusSettings(loaded.statusSettings);
+      setOnboarded(loaded.onboarded);
+
+      setDataReady(true);
       setTimeout(() => setLoadingVisible(false), 2100);
     })();
   }, []);
+
+  // ── Auto-save effects — all guarded by dataReady to prevent writing
+  //    initial empty/default state back over real saved data before load completes ──
+  useEffect(() => {
+    if (!dataReady) return;
+    canweRepository.saveEvents(events);
+  }, [events, dataReady]);
+
+  useEffect(() => {
+    if (!dataReady) return;
+    canweRepository.saveRules(rules);
+  }, [rules, dataReady]);
+
+  useEffect(() => {
+    if (!dataReady) return;
+    canweRepository.saveRecurringSchedules(recurring);
+  }, [recurring, dataReady]);
+
+  useEffect(() => {
+    if (!dataReady) return;
+    canweRepository.saveWeekStart(weekStart);
+  }, [weekStart, dataReady]);
+
+  useEffect(() => {
+    if (!dataReady) return;
+    canweRepository.saveDisplayRange(displayRange);
+  }, [displayRange, dataReady]);
+
+  useEffect(() => {
+    if (!dataReady) return;
+    canweRepository.saveStatusSettings(statusSettings);
+  }, [statusSettings, dataReady]);
 
   const toast = (msg) => {
     setToastMsg(msg); setToastOn(true);
@@ -2381,12 +2628,32 @@ export default function CanWe() {
     toastTimer.current = setTimeout(() => setToastOn(false), 2400);
   };
 
-  const handleOnboardDone = (range) => {
+  // Apply any user-customised status label/description to the shared STATUS
+  // object BEFORE this render pass's children are created, so every page
+  // (Home/DayView/WeekView/EventModal/ShareSheet/GcalSettings preview) shows
+  // the updated name immediately without needing individual prop plumbing.
+  applyStatusOverrides(statusSettings);
+
+  const handleOnboardDone = async (range) => {
     setDisplayRange(range);
     setOnboarded(true);
+    await canweRepository.saveOnboarded(true);
   };
 
-  // Show onboarding after loading screen
+  // Don't render the main app (or decide about onboarding) until the
+  // initial data load has resolved — prevents a flash of seed data
+  // briefly overwriting a returning user's real saved state.
+  if (!dataReady) {
+    return (
+      <div className={`ls ${loadingVisible?"":"hidden"}`}>
+        <div className="ls-title">Can we…?</div>
+        <div className="ls-sub">讓時間自己說話</div>
+        <div className="ls-pip" />
+      </div>
+    );
+  }
+
+  // Show onboarding after loading screen, only for genuinely new users
   if (!loadingVisible && !onboarded) {
     return (
       <>
@@ -2421,9 +2688,9 @@ export default function CanWe() {
         </nav>
 
         <div className="app">
-          {tab==="首頁" && <HomePage events={events} displayRange={displayRange} setTab={setTab} toast={toast} />}
-          {tab==="行程" && <EventsPage events={events} setEvents={setEvents} displayRange={displayRange} weekStart={weekStart} toast={toast} />}
-          {tab==="設定" && <SettingsPage rules={rules} setRules={setRules} events={events} setEvents={setEvents} displayRange={displayRange} setDisplayRange={setDisplayRange} recurring={recurring} setRecurring={setRecurring} weekStart={weekStart} setWeekStart={setWeekStart} toast={toast} />}
+          {tab==="首頁" && <HomePage events={events} displayRange={displayRange} statusSettings={statusSettings} setTab={setTab} toast={toast} />}
+          {tab==="行程" && <EventsPage events={events} setEvents={setEvents} displayRange={displayRange} weekStart={weekStart} statusSettings={statusSettings} toast={toast} />}
+          {tab==="設定" && <SettingsPage rules={rules} setRules={setRules} events={events} setEvents={setEvents} displayRange={displayRange} setDisplayRange={setDisplayRange} recurring={recurring} setRecurring={setRecurring} weekStart={weekStart} setWeekStart={setWeekStart} statusSettings={statusSettings} setStatusSettings={setStatusSettings} toast={toast} />}
         </div>
 
         {/* Mobile bottom nav — hidden on desktop via CSS */}
