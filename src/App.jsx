@@ -488,18 +488,19 @@ html, body {
 .status-select:focus { border-color: var(--accent); }
 
 /* ── Form elements ── */
-.field { display: flex; flex-direction: column; gap: 6px; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .field-label { font-size: 0.72rem; letter-spacing: 0.12em; color: var(--muted); }
 .input {
   background: var(--surface2); border: 1px solid var(--border2); border-radius: var(--radius-sm);
   color: var(--text); font-family: var(--font-b); font-size: 0.9rem; font-weight: 400;
-  padding: 11px 14px; outline: none; width: 100%;
+  padding: 11px 14px; outline: none; width: 100%; box-sizing: border-box;
   transition: border-color 0.15s;
 }
 .input:focus { border-color: var(--accent); }
 .time-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; min-width: 0; }
 .time-row > * { min-width: 0; overflow: hidden; }
-input[type="time"].input { width: 100%; min-width: 0; appearance: none; -webkit-appearance: none; }
+input[type="time"].input,
+input[type="date"].input { width: 100%; min-width: 0; box-sizing: border-box; appearance: none; -webkit-appearance: none; }
 
 /* ── Status picker in modal ── */
 .status-picker { display: flex; flex-direction: column; gap: 7px; }
